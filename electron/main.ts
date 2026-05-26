@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, session, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, session, shell, desktopCapturer } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -50,6 +50,8 @@ app.on('window-all-closed', () => {
   }
 });
 
+import { handleDesktopAction } from './action_handler';
+
 ipcMain.on('log', (event, msg) => {
   console.log('[RENDERER LOG]', typeof msg === 'object' ? JSON.stringify(msg, null, 2) : msg);
 });
@@ -57,6 +59,24 @@ ipcMain.on('log', (event, msg) => {
 ipcMain.handle('open-external', async (event, url) => {
   await shell.openExternal(url);
 });
+
+// Allow renderer to request the primary screen source ID for WebRTC capture
+ipcMain.handle('get-screen-source', async () => {
+  const sources = await desktopCapturer.getSources({ types: ['screen'] });
+  // We just return the first screen for now
+  return sources[0]?.id;
+});
+
+ipcMain.handle('desktop-action', async (event, actionName, args) => {
+  try {
+    return await handleDesktopAction(actionName, args);
+  } catch (error: any) {
+    console.error('Desktop action error:', error);
+    throw error;
+  }
+});
+
+
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {

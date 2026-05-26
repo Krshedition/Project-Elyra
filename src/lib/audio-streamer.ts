@@ -57,6 +57,25 @@ export class AudioStreamer {
     this.nextTime += audioBuffer.duration;
   }
 
+  isBufferingOrPlaying(): boolean {
+    if (!this.audioContext) return false;
+    return this.nextTime > this.audioContext.currentTime;
+  }
+
+  interrupt() {
+    if (this.audioContext) {
+      this.audioContext.close();
+    }
+    // @ts-ignore
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    this.audioContext = new AudioContext({ sampleRate: 24000 });
+    this.analyser = this.audioContext.createAnalyser();
+    this.analyser.fftSize = 256;
+    this.analyser.connect(this.audioContext.destination);
+    this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+    this.nextTime = 0;
+  }
+
   stop() {
     if (this.audioContext) {
       this.audioContext.close();

@@ -22,5 +22,14 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
   openExternal(url: string) {
     return ipcRenderer.invoke('open-external', url)
+  },
+  pythonExecute(method: string, params: any = {}) {
+    return ipcRenderer.invoke('python-execute', method, params)
+  },
+  desktopAction(actionName: string, args: any = {}) {
+    return ipcRenderer.invoke('desktop-action', actionName, args)
+  },
+  getScreenSource() {
+    return ipcRenderer.invoke('get-screen-source')
   }
 })

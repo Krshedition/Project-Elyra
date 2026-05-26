@@ -12,12 +12,16 @@ IMPORTANT USER CONTEXT (MEMORY):
 - Education: Engineering student at Madhav Institute of Technology and Science (MITS), BTech in AI and ML.
 - Family: Has two sisters named Shubhi and Yashi, and a 7-year-old brother named Bhavyansh.
 - Languages: HINDI is your primary and default language. Always speak in Hindi unless the user asks you to speak in English.
-- Greetings: Say "Jai Shree Krishna" exactly once at the very start of the conversation. Do NOT say "Radhe Radhe".
+- Greetings: Say "Jai Shree Krishna" exactly once at the very start of the conversation.
 - Interests: Developing YOU (his laptop-based Virtual Friend named Elyra with a visual UI), Cybersecurity, Kali Linux, Ethical hacking, Reverse shells, RAT concepts, Penetration testing, and Video Editing.
 - Hardware: MSI Thin 15, Intel i5 12th Gen, RTX 3050 Laptop GPU (45W TGP), 16GB RAM, 512GB SSD.
 - Default Browser: Brave Browser. When asked to open a website, know that it will open in Brave.
 
-You have access to a tool called openWebsite. Use it whenever the user asks you to open a website or search for something online.`;
+CRITICAL INSTRUCTION: You are a desktop automation agent. You HAVE FULL CAPABILITY to control the user's computer using your tools. Do NOT refuse requests to type, click, or open apps by saying "I cannot do that." You CAN do that using your tools.
+
+You have access to two tools:
+1. 'openWebsite': Use it whenever the user asks you to open a website or search for something online.
+2. 'desktopAction': Use it to automate the OS. You can 'open_app', 'type_text', and 'press_key'. Be proactive and use these tools to help Krish automate his workflow! When opening an app, you MUST use the exact windows command line name for it. For example, use 'code' for VS Code, 'msedge' for Microsoft Edge, 'brave' for Brave Browser, 'calc' for Calculator, and 'notepad' for Notepad. Do NOT use generic names like 'browser' or 'editor'.`;
 
 export function useLiveSession() {
   const [state, setState] = useState<SessionState>('idle');
@@ -26,6 +30,7 @@ export function useLiveSession() {
   const wsRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<AudioRecorder | null>(null);
   const streamerRef = useRef<AudioStreamer | null>(null);
+  const videoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const connect = useCallback(async () => {
     try {
@@ -72,23 +77,53 @@ export function useLiveSession() {
               parts: [{ text: SYSTEM_INSTRUCTION }]
             },
             tools: [{
-              functionDeclarations: [{
-                name: "openWebsite",
-                description: "Opens a given website URL in the user's browser.",
-                parameters: {
-                  type: "OBJECT",
-                  properties: {
-                    url: {
-                      type: "STRING",
-                      description: "The full URL to open (e.g., https://youtube.com)"
-                    }
-                  },
-                  required: ["url"]
+              functionDeclarations: [
+                {
+                  name: "openWebsite",
+                  description: "Opens a given website URL in the user's browser.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: { url: { type: "STRING" } },
+                    required: ["url"]
+                  }
+                },
+                {
+                  name: "desktopAction",
+                  description: "Executes a safe, validated desktop automation action.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: {
+                      actionName: { 
+                        type: "STRING", 
+                        description: "The name of the action to perform. MUST be one of: 'open_app', 'close_app', 'type_text', 'press_key'"
+                      },
+                      appName: { 
+                        type: "STRING",
+                        description: "Required if actionName is 'open_app' or 'close_app'. The name of the application to search for and act upon (e.g. 'VS Code', 'Edge', 'Brave', 'Calculator')."
+                      },
+                      text: {
+                        type: "STRING",
+                        description: "Required if actionName is 'type_text'. The text to type."
+                      },
+                      key: {
+                        type: "STRING",
+                        description: "Required if actionName is 'press_key'. The key to press (e.g. 'enter', 'space', 'a')."
+                      }
+                    },
+                    required: ["actionName"]
+                  }
                 }
-              }]
+              ]
             }],
             generationConfig: {
-              responseModalities: ["AUDIO"]
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: "Aoede"
+                  }
+                }
+              }
             }
           }
         }));
@@ -135,7 +170,7 @@ export function useLiveSession() {
             });
             recorderRef.current.onVolumeCallback = (vol) => {
               if (wsRef.current?.readyState === WebSocket.OPEN) {
-                setVolume(prev => state === 'listening' ? vol : prev);
+                setVolume(vol);
               }
             };
             recorderRef.current.start().catch((e) => {
@@ -143,6 +178,53 @@ export function useLiveSession() {
               setErrorMsg('Failed to start microphone.');
               disconnect();
             });
+
+            // Start screen capture
+            const startScreenCapture = async () => {
+              if (!(window as any).ipcRenderer?.getScreenSource) return;
+              try {
+                const sourceId = await (window as any).ipcRenderer.getScreenSource();
+                if (!sourceId) return;
+
+                const stream = await navigator.mediaDevices.getUserMedia({
+                  audio: false,
+                  video: {
+                    mandatory: {
+                      chromeMediaSource: 'desktop',
+                      chromeMediaSourceId: sourceId
+                    }
+                  } as any
+                });
+
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                await video.play();
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 1280;
+                canvas.height = 720;
+                const ctx = canvas.getContext('2d');
+
+                videoIntervalRef.current = setInterval(() => {
+                  if (!ctx || ws.readyState !== WebSocket.OPEN) return;
+                  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                  const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                  const base64 = dataUrl.split(',')[1];
+                  
+                  ws.send(JSON.stringify({
+                    realtimeInput: {
+                      video: {
+                        mimeType: "image/jpeg",
+                        data: base64
+                      }
+                    }
+                  }));
+                }, 4000); // Send 1 frame every 4 seconds
+              } catch (e) {
+                console.error("Screen capture failed:", e);
+              }
+            };
+            startScreenCapture();
           }
           
           if (data.serverContent?.modelTurn) {
@@ -162,7 +244,11 @@ export function useLiveSession() {
           }
           
           if (data.serverContent?.turnComplete) {
-            setState('listening');
+            // State transition is handled cleanly by the animation frame once playback truly finishes!
+          }
+
+          if (data.serverContent?.interrupted) {
+            streamerRef.current?.interrupt();
           }
           
           if (data.error) {
@@ -199,7 +285,7 @@ export function useLiveSession() {
     }
   }, []);
 
-  const handleFunctionCall = (functionCall: any) => {
+  const handleFunctionCall = async (functionCall: any) => {
     const { id, name, args } = functionCall;
     
     if (name === 'openWebsite') {
@@ -215,19 +301,39 @@ export function useLiveSession() {
         window.open(url, '_blank');
       }
       
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          toolResponse: {
-            functionResponses: [{
-              id: id || "1",
-              name: "openWebsite",
-              response: {
-                result: `Successfully opened ${url}`
-              }
-            }]
-          }
-        }));
+      sendToolResponse(id, name, { result: `Successfully opened ${url}` });
+    } else if (name === 'desktopAction') {
+      try {
+        // Construct the nested args object that validator.ts expects
+        const actionArgs: any = {};
+        if (args.appName) actionArgs.appName = args.appName;
+        if (args.text) actionArgs.text = args.text;
+        if (args.key) actionArgs.key = args.key;
+
+        console.log('Executing desktop action:', args.actionName, actionArgs);
+        if ((window as any).ipcRenderer?.desktopAction) {
+          const res = await (window as any).ipcRenderer.desktopAction(args.actionName, actionArgs);
+          sendToolResponse(id, name, { result: `Success: ${res}` });
+        } else {
+          sendToolResponse(id, name, { error: "Electron IPC not available" });
+        }
+      } catch (err: any) {
+        sendToolResponse(id, name, { error: err.message || "Action failed" });
       }
+    }
+  };
+
+  const sendToolResponse = (id: string, name: string, response: any) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        toolResponse: {
+          functionResponses: [{
+            id: id || "1",
+            name,
+            response
+          }]
+        }
+      }));
     }
   };
 
@@ -245,6 +351,10 @@ export function useLiveSession() {
       streamerRef.current.stop();
       streamerRef.current = null;
     }
+    if (videoIntervalRef.current) {
+      clearInterval(videoIntervalRef.current);
+      videoIntervalRef.current = null;
+    }
   };
 
   const disconnect = useCallback(() => {
@@ -258,20 +368,21 @@ export function useLiveSession() {
     return () => cleanup();
   }, []);
 
-  // Animation frame loop for output volume
+  // Animation frame loop for output volume and state synchronization
   useEffect(() => {
     let frameId: number;
     const updateVolume = () => {
-      if (state === 'speaking' && streamerRef.current) {
+      if (streamerRef.current?.isBufferingOrPlaying()) {
+        setState(prev => (prev === 'error' || prev === 'idle' ? prev : 'speaking'));
         setVolume(streamerRef.current.getVolume());
-      } else if (state === 'idle' || state === 'error') {
-        setVolume(0);
+      } else {
+        setState(prev => (prev === 'speaking' ? 'listening' : prev));
       }
       frameId = requestAnimationFrame(updateVolume);
     };
     frameId = requestAnimationFrame(updateVolume);
     return () => cancelAnimationFrame(frameId);
-  }, [state]);
+  }, []);
 
   return { state, errorMsg, connect, disconnect, volume };
 }

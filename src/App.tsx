@@ -7,7 +7,8 @@ function App() {
 
   useEffect(() => {
     connect();
-  }, [connect]);
+    return () => disconnect();
+  }, [connect, disconnect]);
 
   const handleToggle = () => {
     if (state === 'idle' || state === 'error') {
