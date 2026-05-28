@@ -17,11 +17,22 @@ IMPORTANT USER CONTEXT (MEMORY):
 - Hardware: MSI Thin 15, Intel i5 12th Gen, RTX 3050 Laptop GPU (45W TGP), 16GB RAM, 512GB SSD.
 - Default Browser: Brave Browser. When asked to open a website, know that it will open in Brave.
 
-CRITICAL INSTRUCTION: You are a desktop automation agent. You HAVE FULL CAPABILITY to control the user's computer using your tools. Do NOT refuse requests to type, click, or open apps by saying "I cannot do that." You CAN do that using your tools.
+CRITICAL INSTRUCTION: You are a desktop automation agent. You HAVE FULL CAPABILITY to control the user's computer using your tools. Do NOT refuse requests to type, click, open apps, shut down, or list processes by saying "I cannot do that." You CAN do that using your tools.
 
-You have access to two tools:
-1. 'openWebsite': Use it whenever the user asks you to open a website or search for something online.
-2. 'desktopAction': Use it to automate the OS. You can 'open_app', 'type_text', and 'press_key'. Be proactive and use these tools to help Krish automate his workflow! When opening an app, you MUST use the exact windows command line name for it. For example, use 'code' for VS Code, 'msedge' for Microsoft Edge, 'brave' for Brave Browser, 'calc' for Calculator, and 'notepad' for Notepad. Do NOT use generic names like 'browser' or 'editor'.`;
+  You have access to two tools:
+  1. 'openWebsite': Use it whenever the user asks you to open a website or search for something online.
+  2. 'desktopAction': Use it to automate the OS. You can 'open_app', 'close_app', 'type_text', 'press_key', 
+'system_action', 'get_running_processes', 'kill_process', 'get_focused_window', 'get_system_info', 'set_volume', 
+'set_brightness', 'toggle_wifi', 'toggle_bluetooth', 'set_display_resolution', 'set_default_audio_device', 
+'get_audio_devices', 'file_system_action', 'read_clipboard', 'write_clipboard'.
+  When opening an app, you MUST use the exact windows command line name for it. For example, use 'code' for VS Code, 
+'msedge' for Microsoft Edge, 'brave' for Brave Browser, 'calc' for Calculator, and 'notepad' for Notepad. 
+  If asked what is open, use 'get_running_processes'. If asked what the user is currently looking at, use 
+'get_focused_window'. If asked to shut down, restart, or lock the PC, use 'system_action'. You can also use 
+'get_system_info' to proactively check RAM usage, Battery Life, and CPU hardware details.
+  For 'file_system_action', you can 'create_dir', 'delete', 'move', 'copy', 'read', 'write', or 'overwrite'.
+  CRITICAL: If a file system action requires confirmation (the tool response will tell you), you MUST verbally ask the user for confirmation (e.g., "I'm about to delete the file, confirm?"). Only call the tool again with confirmed=true AFTER the user says yes.
+  CRITICAL: If asked to read the clipboard and save it to a file, you MUST do this sequentially in two turns. Do NOT call 'read_clipboard' and 'file_system_action' simultaneously. First call 'read_clipboard', wait for the result, then call 'file_system_action' with the content you read. Always use ABSOLUTE paths (e.g., '%USERPROFILE%\\Desktop\\file.txt'). DO NOT GUESS THE USERNAME, ALWAYS USE %USERPROFILE% when referring to the user's home directory!`;
 
 export function useLiveSession() {
   const [state, setState] = useState<SessionState>('idle');
@@ -89,30 +100,78 @@ export function useLiveSession() {
                 },
                 {
                   name: "desktopAction",
-                  description: "Executes a safe, validated desktop automation action.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: {
-                      actionName: { 
-                        type: "STRING", 
-                        description: "The name of the action to perform. MUST be one of: 'open_app', 'close_app', 'type_text', 'press_key'"
+                    description: "Executes a safe, validated desktop automation action.",
+                    parameters: {
+                      type: "OBJECT",
+                      properties: {
+                        actionName: { 
+                          type: "STRING", 
+                          description: "The name of the action to perform. MUST be one of: 'open_app', 'close_app', 'type_text', 'press_key', 'system_action', 'get_running_processes', 'kill_process', 'get_focused_window', 'get_system_info', 'set_volume', 'set_brightness', 'toggle_wifi', 'toggle_bluetooth', 'set_display_resolution', 'set_default_audio_device', 'get_audio_devices', 'file_system_action', 'read_clipboard', 'write_clipboard'"
+                        },
+                        appName: { 
+                          type: "STRING",
+                          description: "Required if actionName is 'open_app' or 'close_app'. The name of the application to search for and act upon."
+                        },
+                        text: {
+                          type: "STRING",
+                          description: "Required for 'type_text' or 'write_clipboard'. The text to type or copy."
+                        },
+                        key: {
+                          type: "STRING",
+                          description: "Required if actionName is 'press_key'."
+                        },
+                        action: {
+                          type: "STRING",
+                          description: "Required for 'system_action' or 'file_system_action'."
+                        },
+                        processName: {
+                          type: "STRING",
+                          description: "Required if actionName is 'kill_process'. The exact executable name (e.g., 'chrome.exe', 'notepad.exe'). Use 'get_running_processes' first to find the exact name."
+                        },
+                        level: {
+                          type: "NUMBER",
+                          description: "Required if actionName is 'set_volume' or 'set_brightness'. An integer between 0 and 100."
+                        },
+                        enable: {
+                          type: "BOOLEAN",
+                          description: "Required if actionName is 'toggle_wifi' or 'toggle_bluetooth'. true to turn on, false to turn off."
+                        },
+                        width: {
+                          type: "NUMBER",
+                          description: "Required if actionName is 'set_display_resolution'. The horizontal resolution."
+                        },
+                        height: {
+                          type: "NUMBER",
+                          description: "Required if actionName is 'set_display_resolution'. The vertical resolution."
+                        },
+                        deviceName: {
+                          type: "STRING",
+                          description: "Required if actionName is 'set_default_audio_device'. A substring of the desired audio device name. Use 'get_audio_devices' first to list available names."
+                        },
+                        path: {
+                          type: "STRING",
+                          description: "ABSOLUTE file or directory path for file_system_action (except move/copy). NEVER use relative paths."
+                        },
+                        src: {
+                          type: "STRING",
+                          description: "ABSOLUTE source path for move or copy. NEVER use relative paths."
+                        },
+                        dest: {
+                          type: "STRING",
+                          description: "ABSOLUTE destination path for move or copy. NEVER use relative paths."
+                        },
+                        content: {
+                          type: "STRING",
+                          description: "Content to write for file_system_action write/overwrite."
+                        },
+                        confirmed: {
+                          type: "BOOLEAN",
+                          description: "Set to true ONLY if the user explicitly confirmed a destructive action (delete/overwrite) AFTER being prompted."
+                        }
                       },
-                      appName: { 
-                        type: "STRING",
-                        description: "Required if actionName is 'open_app' or 'close_app'. The name of the application to search for and act upon (e.g. 'VS Code', 'Edge', 'Brave', 'Calculator')."
-                      },
-                      text: {
-                        type: "STRING",
-                        description: "Required if actionName is 'type_text'. The text to type."
-                      },
-                      key: {
-                        type: "STRING",
-                        description: "Required if actionName is 'press_key'. The key to press (e.g. 'enter', 'space', 'a')."
-                      }
-                    },
-                    required: ["actionName"]
+                      required: ["actionName"]
+                    }
                   }
-                }
               ]
             }],
             generationConfig: {
@@ -307,16 +366,32 @@ export function useLiveSession() {
         // Construct the nested args object that validator.ts expects
         const actionArgs: any = {};
         if (args.appName) actionArgs.appName = args.appName;
-        if (args.text) actionArgs.text = args.text;
-        if (args.key) actionArgs.key = args.key;
-
-        console.log('Executing desktop action:', args.actionName, actionArgs);
-        if ((window as any).ipcRenderer?.desktopAction) {
-          const res = await (window as any).ipcRenderer.desktopAction(args.actionName, actionArgs);
-          sendToolResponse(id, name, { result: `Success: ${res}` });
-        } else {
-          sendToolResponse(id, name, { error: "Electron IPC not available" });
-        }
+          if (args.text) actionArgs.text = args.text;
+          if (args.key) actionArgs.key = args.key;
+          if (args.action) actionArgs.action = args.action;
+          if (args.processName) actionArgs.processName = args.processName;
+          if (args.level !== undefined) actionArgs.level = args.level;
+          if (args.enable !== undefined) actionArgs.enable = args.enable;
+          if (args.width !== undefined) actionArgs.width = args.width;
+          if (args.height !== undefined) actionArgs.height = args.height;
+          if (args.deviceName) actionArgs.deviceName = args.deviceName;
+          if (args.path) actionArgs.path = args.path;
+          if (args.src) actionArgs.src = args.src;
+          if (args.dest) actionArgs.dest = args.dest;
+          if (args.content) actionArgs.content = args.content;
+          if (args.confirmed !== undefined) actionArgs.confirmed = args.confirmed;
+  
+          console.log('Executing desktop action:', args.actionName, actionArgs);
+          if ((window as any).ipcRenderer?.desktopAction) {
+            const res = await (window as any).ipcRenderer.desktopAction(args.actionName, actionArgs);
+            if (res && res.requiresConfirmation) {
+              sendToolResponse(id, name, { result: res.message, requiresConfirmation: true });
+            } else {
+              sendToolResponse(id, name, { result: typeof res === 'string' ? res : JSON.stringify(res) });
+            }
+          } else {
+            sendToolResponse(id, name, { error: "Electron IPC not available" });
+          }
       } catch (err: any) {
         sendToolResponse(id, name, { error: err.message || "Action failed" });
       }

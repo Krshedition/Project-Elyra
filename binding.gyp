@@ -27,7 +27,12 @@
       "libraries": [
         "-lUser32.lib",
         "-lUIAutomationCore.lib",
-        "-lShell32.lib"
+        "-lShell32.lib",
+        "-lWbemuuid.lib",
+        "-lWlanapi.lib",
+        "-lruntimeobject.lib",
+        "-lole32.lib",
+        "-loleaut32.lib"
       ]
     }
   ]
