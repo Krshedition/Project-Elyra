@@ -1,5 +1,4 @@
 import { validateAction } from './validator';
-import { createRequire } from 'node:module';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
@@ -11,7 +10,7 @@ function expandEnvVars(filepath: string | undefined): string | undefined {
   return filepath.replace(/%([^%]+)%/g, (_, n) => process.env[n] || '');
 }
 
-const require = createRequire(import.meta.url);
+// Native require is used below
 let automation: any;
 try {
   automation = require('../build/Release/elyra_automation.node');
@@ -35,7 +34,10 @@ export async function handleDesktopAction(actionName: string, args: any) {
 
   switch (actionName) {
     case 'open_app':
-      return await automation.launchApp(args.appName);
+      const res = await automation.launchApp(args.appName);
+      // Wait 1.5 seconds for the app window to fully render and grab focus
+      await new Promise(r => setTimeout(r, 1500));
+      return res;
 
     case 'close_app':
       if (!args.appName) {
@@ -44,8 +46,8 @@ export async function handleDesktopAction(actionName: string, args: any) {
       return await automation.closeApp(args.appName);
 
     case 'type_text':
-      if (!args.appName) {
-        throw new Error("appName is required by the Native C++ Addon to type text");
+      if (!args.appName || !args.text) {
+        throw new Error("appName and text are strictly required by the Native C++ Addon to type text");
       }
       return await automation.injectText(args.appName, args.text);
 

@@ -31,5 +31,29 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
   getScreenSource() {
     return ipcRenderer.invoke('get-screen-source')
+  },
+  getSystemContext() {
+    return ipcRenderer.invoke('get-system-context')
+  },
+  searchMemory(query: string) {
+    return ipcRenderer.invoke('search-memory', query)
+  },
+  saveSessionDigest(payload: any) {
+    return ipcRenderer.invoke('save-session-digest', payload)
+  },
+  getAllFactsDetailed() {
+    return ipcRenderer.invoke('get-all-facts-detailed')
+  },
+  deleteFact(key: string) {
+    return ipcRenderer.invoke('delete-fact', key)
+  },
+  addFactManual(payload: any) {
+    return ipcRenderer.invoke('add-fact-manual', payload)
+  },
+  updateFactManual(payload: any) {
+    return ipcRenderer.invoke('update-fact-manual', payload)
+  },
+  setWindowMode(mode: 'compact' | 'expanded') {
+    return ipcRenderer.send('set-window-mode', mode)
   }
 })

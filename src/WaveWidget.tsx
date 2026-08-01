@@ -7,6 +7,7 @@ export type SessionState = 'idle' | 'connecting' | 'listening' | 'speaking' | 'e
 interface WaveWidgetProps {
   state: SessionState;
   onToggle: () => void;
+  onSettingsClick?: () => void;
   errorMsg?: string;
   volume?: number;
 }
@@ -71,7 +72,7 @@ function BackgroundParticles({ mouseX, mouseY }: { mouseX: number, mouseY: numbe
   );
 }
 
-export function WaveWidget({ state, onToggle, errorMsg, volume = 0 }: WaveWidgetProps) {
+export function WaveWidget({ state, onToggle, onSettingsClick, errorMsg, volume = 0 }: WaveWidgetProps) {
   const [bootPhase, setBootPhase] = useState(0);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
@@ -284,7 +285,7 @@ export function WaveWidget({ state, onToggle, errorMsg, volume = 0 }: WaveWidget
           <button className="text-white/50 hover:text-white transition-colors">
             <Keyboard className="w-5 h-5" />
           </button>
-          <button className="text-white/50 hover:text-white transition-colors">
+          <button onClick={onSettingsClick} className="text-white/50 hover:text-white transition-colors">
             <Settings className="w-5 h-5" />
           </button>
         </motion.div>

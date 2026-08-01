@@ -1,8 +1,6 @@
 import { app, BrowserWindow, ipcMain, screen, session, shell, desktopCapturer } from 'electron';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { initMemory, getRecentContext, saveSessionSummary, saveFact, getAllFactsDetailed, deleteFact, updateFact } from './memory';
 
 process.env.APP_ROOT = path.join(__dirname, '..');
 
@@ -30,7 +28,7 @@ function createWindow() {
     resizable: false,
     skipTaskbar: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.mjs'),
+      preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
@@ -42,6 +40,20 @@ function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, 'index.html'));
   }
 }
+
+let pendingMemoryTask: Promise<void> | null = null;
+let isQuitting = false;
+
+app.on('before-quit', (e) => {
+  if (pendingMemoryTask && !isQuitting) {
+    e.preventDefault();
+    console.log('Main Process: Waiting for memory worker to finish before quitting...');
+    pendingMemoryTask.then(() => {
+      isQuitting = true;
+      app.quit();
+    });
+  }
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -60,6 +72,18 @@ ipcMain.handle('open-external', async (event, url) => {
   await shell.openExternal(url);
 });
 
+ipcMain.on('set-window-mode', (event, mode: 'compact' | 'expanded') => {
+  if (!win) return;
+  const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
+  if (mode === 'compact') {
+    win.setContentSize(500, 150);
+    win.setPosition(screenWidth - 500 - 20, 20);
+  } else {
+    win.setContentSize(500, 650);
+    win.setPosition(screenWidth - 500 - 20, 20);
+  }
+});
+
 // Allow renderer to request the primary screen source ID for WebRTC capture
 ipcMain.handle('get-screen-source', async () => {
   const sources = await desktopCapturer.getSources({ types: ['screen'] });
@@ -76,6 +100,56 @@ ipcMain.handle('desktop-action', async (event, actionName, args) => {
   }
 });
 
+ipcMain.handle('get-system-context', async () => {
+  return getRecentContext();
+});
+
+ipcMain.handle('process-memory-worker', async (event, { transcript, apiKey }) => {
+  const { runMemoryWorkerMain } = require('./memory');
+  pendingMemoryTask = runMemoryWorkerMain(transcript, apiKey);
+  return true;
+});
+
+ipcMain.handle('search-memory', async (event, query: string) => {
+  const { searchFacts } = require('./memory');
+  return searchFacts(query);
+});
+
+ipcMain.handle('get-all-facts-detailed', async () => {
+  return getAllFactsDetailed();
+});
+
+ipcMain.handle('delete-fact', async (event, key: string) => {
+  deleteFact(key);
+  return true;
+});
+
+ipcMain.handle('add-fact-manual', async (event, payload: { category: string, key: string, value: string }) => {
+  saveFact(payload.category, payload.key, payload.value);
+  return true;
+});
+
+ipcMain.handle('update-fact-manual', async (event, payload: { oldKey: string, category: string, key: string, value: string }) => {
+  updateFact(payload.oldKey, payload.category, payload.key, payload.value);
+  return true;
+});
+
+ipcMain.handle('save-session-digest', async (event, payload) => {
+  if (payload.summary) {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayOfWeek = days[new Date().getDay()];
+    saveSessionSummary(payload.summary, dayOfWeek);
+  }
+  if (payload.facts && Array.isArray(payload.facts)) {
+    for (const fact of payload.facts) {
+      if (fact.category && fact.key && fact.value) {
+        saveFact(fact.category, fact.key, fact.value);
+      }
+    }
+  }
+  return true;
+});
+
 
 
 const gotTheLock = app.requestSingleInstanceLock();
@@ -90,6 +164,7 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
+  initMemory();
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     if (permission === 'media') {
       callback(true);

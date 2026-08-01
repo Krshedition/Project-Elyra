@@ -64,22 +64,40 @@ namespace Automation {
         return data.resultHwnd;
     }
 
+    void ForceForegroundWindow(HWND hwnd) {
+        if (!hwnd) return;
+        HWND currentForeground = GetForegroundWindow();
+        if (currentForeground != hwnd) {
+            DWORD fgThread = GetWindowThreadProcessId(currentForeground, NULL);
+            DWORD targetThread = GetWindowThreadProcessId(hwnd, NULL);
+            DWORD myThread = GetCurrentThreadId();
+            
+            AttachThreadInput(myThread, targetThread, TRUE);
+            AttachThreadInput(myThread, fgThread, TRUE);
+            AttachThreadInput(fgThread, targetThread, TRUE);
+            
+            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            SetForegroundWindow(hwnd);
+            SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            
+            AttachThreadInput(myThread, targetThread, FALSE);
+            AttachThreadInput(myThread, fgThread, FALSE);
+            AttachThreadInput(fgThread, targetThread, FALSE);
+        }
+        
+        // Polling wait
+        for (int i = 0; i < 10; ++i) {
+            if (GetForegroundWindow() == hwnd) break;
+            Sleep(50);
+        }
+    }
+
     bool InjectText(HWND hwnd, const std::wstring& text) {
         if (hwnd == NULL) return false;
         
-        SetForegroundWindow(hwnd);
+        ForceForegroundWindow(hwnd);
         
-        // Robust polling: Wait up to 500ms for focus
-        bool focused = false;
-        for (int i = 0; i < 10; ++i) {
-            if (GetForegroundWindow() == hwnd) {
-                focused = true;
-                break;
-            }
-            Sleep(50);
-        }
-        
-        if (!focused) return false;
+        if (GetForegroundWindow() != hwnd) return false;
 
         for (wchar_t c : text) {
             INPUT inputDown = { 0 };
@@ -135,15 +153,7 @@ namespace Automation {
 
     bool PressKey(HWND hwnd, const std::wstring& key) {
         if (hwnd != NULL) {
-            SetForegroundWindow(hwnd);
-            bool focused = false;
-            for (int i = 0; i < 10; ++i) {
-                if (GetForegroundWindow() == hwnd) {
-                    focused = true;
-                    break;
-                }
-                Sleep(50);
-            }
+            ForceForegroundWindow(hwnd);
         }
         
         std::vector<std::wstring> keys;

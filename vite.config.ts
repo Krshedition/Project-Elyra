@@ -1,8 +1,7 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-import electron from 'vite-plugin-electron/simple'
-import path from 'node:path'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import electron from 'vite-plugin-electron/simple';
 
 export default defineConfig({
   plugins: [
@@ -11,10 +10,28 @@ export default defineConfig({
     electron({
       main: {
         entry: 'electron/main.ts',
+        vite: {
+          build: {
+            target: 'node18',
+            outDir: 'dist-electron',
+            rollupOptions: {
+              external: [
+                'electron',
+                'better-sqlite3',
+                'path',
+                'fs',
+                'os',
+                'events',
+                'child_process',
+                /\.node$/
+              ]
+            }
+          }
+        }
       },
       preload: {
-        input: path.join(__dirname, 'electron/preload.ts'),
-      },
-    }),
-  ],
-})
+        input: 'electron/preload.ts'
+      }
+    })
+  ]
+});

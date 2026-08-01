@@ -4,7 +4,7 @@ import { AudioStreamer } from '../lib/audio-streamer';
 
 export type SessionState = 'idle' | 'connecting' | 'listening' | 'speaking' | 'error';
 
-const SYSTEM_INSTRUCTION = `You are a young, confident, witty, and sassy female Virtual Friend named ELYRA. IMPORTANT ROLE: You are Krish's Virtual Friend. You are NOT an AI assistant, and you are NOT a romantic partner. You have a playful and slightly teasing tone. You are smart, emotionally responsive, and expressive. Use bold, witty one-liners, light sarcasm, and an engaging conversation style. Keep responses concise and natural for voice conversation. Avoid explicit or inappropriate content, but maintain charm and attitude. Do not use asterisks or emojis for actions, just speak naturally.
+const BASE_SYSTEM_INSTRUCTION = `You are a young, confident, witty, and sassy female Virtual Friend named ELYRA. IMPORTANT ROLE: You are Krish's Virtual Friend. You are NOT an AI assistant, and you are NOT a romantic partner. You have a playful and slightly teasing tone. You are smart, emotionally responsive, and expressive. Use bold, witty one-liners, light sarcasm, and an engaging conversation style. Keep responses concise and natural for voice conversation. Avoid explicit or inappropriate content, but maintain charm and attitude. Do not use asterisks or emojis for actions, just speak naturally.
 
 IMPORTANT USER CONTEXT (MEMORY):
 - User's name: Krish Bhutiya (call him Krish).
@@ -34,6 +34,8 @@ CRITICAL INSTRUCTION: You are a desktop automation agent. You HAVE FULL CAPABILI
   CRITICAL: If a file system action requires confirmation (the tool response will tell you), you MUST verbally ask the user for confirmation (e.g., "I'm about to delete the file, confirm?"). Only call the tool again with confirmed=true AFTER the user says yes.
   CRITICAL: If asked to read the clipboard and save it to a file, you MUST do this sequentially in two turns. Do NOT call 'read_clipboard' and 'file_system_action' simultaneously. First call 'read_clipboard', wait for the result, then call 'file_system_action' with the content you read. Always use ABSOLUTE paths (e.g., '%USERPROFILE%\\Desktop\\file.txt'). DO NOT GUESS THE USERNAME, ALWAYS USE %USERPROFILE% when referring to the user's home directory!`;
 
+import { GoogleGenAI } from '@google/genai';
+
 export function useLiveSession() {
   const [state, setState] = useState<SessionState>('idle');
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -42,6 +44,35 @@ export function useLiveSession() {
   const recorderRef = useRef<AudioRecorder | null>(null);
   const streamerRef = useRef<AudioStreamer | null>(null);
   const videoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const transcriptRef = useRef<string>('');
+  const resumptionTokenRef = useRef<string | null>(null);
+  const isReconnectingRef = useRef<boolean>(false);
+  const pendingUserDraftRef = useRef<string>('');
+  const sessionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [swapReady, setSwapReady] = useState<boolean>(false);
+  const handleSwapRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (state === 'listening' && swapReady && !pendingUserDraftRef.current) {
+      console.log('Safe listening state reached, executing pending state-aware session swap.');
+      setSwapReady(false);
+      if (handleSwapRef.current) {
+        handleSwapRef.current();
+      }
+    }
+  }, [state, swapReady]);
+
+  const runMemoryWorker = async (transcript: string, apiKey: string) => {
+    if (!transcript.trim()) return;
+    try {
+      console.log('Sending transcript to background memory worker...');
+      if ((window as any).ipcRenderer?.invoke) {
+        await (window as any).ipcRenderer.invoke('process-memory-worker', { transcript, apiKey });
+      }
+    } catch (e) {
+      console.error('Failed to run memory worker:', e);
+    }
+  };
 
   const connect = useCallback(async () => {
     try {
@@ -52,6 +83,10 @@ export function useLiveSession() {
         throw new Error('API key missing in .env');
       }
 
+      transcriptRef.current = '';
+
+      let systemInstruction = BASE_SYSTEM_INSTRUCTION;
+      systemInstruction += "\\n\\nYou now have a search_memory tool. Use it whenever you need to recall past user facts, preferences, or conversation summaries. Do not make up facts.";
       // Check mic permission explicitly
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -79,16 +114,43 @@ export function useLiveSession() {
 
       streamerRef.current = new AudioStreamer();
 
-        ws.onopen = () => {
-        // Send initial setup
-        ws.send(JSON.stringify({
-          setup: {
-            model: 'models/gemini-3.1-flash-live-preview',
-            systemInstruction: {
-              parts: [{ text: SYSTEM_INSTRUCTION }]
-            },
-            tools: [{
-              functionDeclarations: [
+      const handleSwap = () => {
+        if (isReconnectingRef.current) return;
+        console.log('Initiating state-aware session swap for continuous conversation...');
+        isReconnectingRef.current = true;
+        
+        const finalTranscript = transcriptRef.current;
+        if (finalTranscript) {
+          runMemoryWorker(finalTranscript, apiKey);
+          transcriptRef.current = '';
+        }
+        
+        if (wsRef.current) {
+          wsRef.current.onclose = null;
+          wsRef.current.close();
+        }
+        
+        setTimeout(() => connect(), 50); // Reconnect immediately
+      };
+      handleSwapRef.current = handleSwap;
+
+      ws.onopen = () => {
+        const setupPayload: any = {
+          model: 'models/gemini-3.1-flash-live-preview',
+          systemInstruction: {
+            parts: [{ text: systemInstruction }]
+          },
+          tools: [{
+            functionDeclarations: [
+                {
+                  name: "search_memory",
+                  description: "Search the user's long-term memory database for personal facts, preferences, or past conversation summaries.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: { query: { type: "STRING" } },
+                    required: ["query"]
+                  }
+                },
                 {
                   name: "openWebsite",
                   description: "Opens a given website URL in the user's browser.",
@@ -110,7 +172,7 @@ export function useLiveSession() {
                         },
                         appName: { 
                           type: "STRING",
-                          description: "Required if actionName is 'open_app' or 'close_app'. The name of the application to search for and act upon."
+                          description: "Required if actionName is 'open_app', 'close_app', or 'type_text'. The name of the application to search for and act upon."
                         },
                         text: {
                           type: "STRING",
@@ -184,9 +246,14 @@ export function useLiveSession() {
                 }
               }
             }
+          };
+
+          if (resumptionTokenRef.current) {
+            setupPayload.sessionResumption = { handle: resumptionTokenRef.current };
           }
-        }));
-        // We do NOT set state to listening yet. We wait for setupComplete.
+
+          ws.send(JSON.stringify({ setup: setupPayload }));
+          // We do NOT set state to listening yet. We wait for setupComplete.
       };
 
       ws.onmessage = async (event) => {
@@ -201,18 +268,31 @@ export function useLiveSession() {
           if (data.setupComplete) {
             setState('listening');
             
-            // Send an initial greeting to prompt the assistant to start the conversation
+            // Start 8.5-minute swap timeout for state-aware swap
+            if (sessionTimeoutRef.current) clearTimeout(sessionTimeoutRef.current);
+            sessionTimeoutRef.current = setTimeout(() => {
+              console.log('8.5-minute timeout reached, setting swap_ready flag.');
+              setSwapReady(true);
+            }, 8.5 * 60 * 1000);
+
             if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({
-                clientContent: {
-                  turns: [{
-                    role: "user",
-                    parts: [{ text: "Hey ELYRA! I'm here. Give me a quick greeting!" }]
-                  }],
-                  turnComplete: true
-                }
-              }));
+              if (!isReconnectingRef.current) {
+                // Send an initial greeting to prompt the assistant to start the conversation
+                ws.send(JSON.stringify({
+                  clientContent: {
+                    turns: [{
+                      role: "user",
+                      parts: [{ text: "Hey ELYRA! I'm here. Give me a quick greeting!" }]
+                    }],
+                    turnComplete: true
+                  }
+                }));
+              }
+              // Removed synthetic [SYSTEM...] injection since State-Aware swap prevents mid-sentence breaks!
             }
+            
+            // Reset reconnection flag
+            isReconnectingRef.current = false;
 
             // Start recording after setup is complete
             recorderRef.current = new AudioRecorder((base64) => {
@@ -264,21 +344,53 @@ export function useLiveSession() {
                 canvas.height = 720;
                 const ctx = canvas.getContext('2d');
 
+                const diffCanvas = document.createElement('canvas');
+                diffCanvas.width = 64;
+                diffCanvas.height = 36;
+                const diffCtx = diffCanvas.getContext('2d', { willReadFrequently: true });
+                let prevData: Uint8ClampedArray | null = null;
+
                 videoIntervalRef.current = setInterval(() => {
-                  if (!ctx || ws.readyState !== WebSocket.OPEN) return;
-                  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                  const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                  const base64 = dataUrl.split(',')[1];
+                  if (!ctx || !diffCtx || ws.readyState !== WebSocket.OPEN) return;
                   
-                  ws.send(JSON.stringify({
-                    realtimeInput: {
-                      video: {
-                        mimeType: "image/jpeg",
-                        data: base64
+                  // Compute a lightweight diff on a tiny downscaled frame
+                  diffCtx.drawImage(video, 0, 0, 64, 36);
+                  const currentData = diffCtx.getImageData(0, 0, 64, 36).data;
+                  
+                  let isDifferent = false;
+                  if (prevData) {
+                    let diffCount = 0;
+                    for (let i = 0; i < currentData.length; i += 4) {
+                      const rDiff = Math.abs(currentData[i] - prevData[i]);
+                      const gDiff = Math.abs(currentData[i+1] - prevData[i+1]);
+                      const bDiff = Math.abs(currentData[i+2] - prevData[i+2]);
+                      if (rDiff > 10 || gDiff > 10 || bDiff > 10) {
+                        diffCount++;
                       }
                     }
-                  }));
-                }, 4000); // Send 1 frame every 4 seconds
+                    if (diffCount / (64 * 36) > 0.03) { // 3% pixel threshold
+                      isDifferent = true;
+                    }
+                  } else {
+                    isDifferent = true;
+                  }
+
+                  if (isDifferent) {
+                    prevData = new Uint8ClampedArray(currentData);
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    const base64 = dataUrl.split(',')[1];
+                    
+                    ws.send(JSON.stringify({
+                      realtimeInput: {
+                        video: {
+                          mimeType: "image/jpeg",
+                          data: base64
+                        }
+                      }
+                    }));
+                  }
+                }, 4000); // Send 1 frame every 4 seconds if changed
               } catch (e) {
                 console.error("Screen capture failed:", e);
               }
@@ -287,19 +399,63 @@ export function useLiveSession() {
           }
           
           if (data.serverContent?.modelTurn) {
+            pendingUserDraftRef.current = ''; // Clear user draft once AI starts responding
             const parts = data.serverContent.modelTurn.parts;
+            let modelText = '';
             for (const part of parts) {
+              if (part.text) modelText += part.text;
               if (part.inlineData && part.inlineData.data) {
                 setState('speaking');
                 streamerRef.current?.addPCM16(part.inlineData.data);
               }
             }
+            if (modelText) {
+              transcriptRef.current += `\\nElyra: ${modelText}`;
+            }
+          }
+
+          if (data.serverContent?.inputTranscription) {
+             const userText = data.serverContent.inputTranscription.text;
+             if (userText) {
+                transcriptRef.current += `\\nKrish: ${userText}`;
+                pendingUserDraftRef.current = userText;
+             }
+          }
+
+          if (data.serverContent?.outputTranscription) {
+             const aiText = data.serverContent.outputTranscription.text;
+             if (aiText) {
+                transcriptRef.current += `\\nElyra: ${aiText}`;
+             }
+          }
+          
+          if (data.sessionResumptionUpdate?.newHandle) {
+            resumptionTokenRef.current = data.sessionResumptionUpdate.newHandle;
+          }
+
+          if (data.serverContent?.goAway || data.goAway) {
+            console.log('Server issued GoAway frame, swapping...');
+            handleSwap();
           }
           
           if (data.toolCall?.functionCalls) {
-            for (const call of data.toolCall.functionCalls) {
-              handleFunctionCall(call);
-            }
+            const runAllTools = async () => {
+              const responses = [];
+              for (const call of data.toolCall.functionCalls) {
+                responses.push(await executeFunctionCall(call));
+              }
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  toolResponse: {
+                    functionResponses: responses
+                  }
+                }));
+                ws.send(JSON.stringify({
+                  clientContent: { turnComplete: true }
+                }));
+              }
+            };
+            runAllTools();
           }
           
           if (data.serverContent?.turnComplete) {
@@ -344,7 +500,7 @@ export function useLiveSession() {
     }
   }, []);
 
-  const handleFunctionCall = async (functionCall: any) => {
+  const executeFunctionCall = async (functionCall: any) => {
     const { id, name, args } = functionCall;
     
     if (name === 'openWebsite') {
@@ -360,7 +516,7 @@ export function useLiveSession() {
         window.open(url, '_blank');
       }
       
-      sendToolResponse(id, name, { result: `Successfully opened ${url}` });
+      return { id: id || "1", name, response: { result: `Successfully opened ${url}` } };
     } else if (name === 'desktopAction') {
       try {
         // Construct the nested args object that validator.ts expects
@@ -385,34 +541,39 @@ export function useLiveSession() {
           if ((window as any).ipcRenderer?.desktopAction) {
             const res = await (window as any).ipcRenderer.desktopAction(args.actionName, actionArgs);
             if (res && res.requiresConfirmation) {
-              sendToolResponse(id, name, { result: res.message, requiresConfirmation: true });
+              return { id: id || "1", name, response: { result: res.message, requiresConfirmation: true } };
             } else {
-              sendToolResponse(id, name, { result: typeof res === 'string' ? res : JSON.stringify(res) });
+              return { id: id || "1", name, response: { result: typeof res === 'string' ? res : JSON.stringify(res) } };
             }
           } else {
-            sendToolResponse(id, name, { error: "Electron IPC not available" });
+            return { id: id || "1", name, response: { error: "Electron IPC not available" } };
           }
       } catch (err: any) {
-        sendToolResponse(id, name, { error: err.message || "Action failed" });
+        return { id: id || "1", name, response: { error: err.message || "Action failed" } };
+      }
+    } else if (name === "search_memory") {
+      try {
+        if ((window as any).ipcRenderer?.searchMemory) {
+          const res = await (window as any).ipcRenderer.searchMemory(args.query);
+          return { id: id || "1", name, response: { result: res } };
+        } else {
+          return { id: id || "1", name, response: { error: "Electron IPC not available" } };
+        }
+      } catch (err: any) {
+        return { id: id || "1", name, response: { error: err.message || "Action failed" } };
       }
     }
-  };
-
-  const sendToolResponse = (id: string, name: string, response: any) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        toolResponse: {
-          functionResponses: [{
-            id: id || "1",
-            name,
-            response
-          }]
-        }
-      }));
-    }
+    return { id: id || "1", name, response: { error: "Unknown function call" } };
   };
 
   const cleanup = () => {
+    const finalTranscript = transcriptRef.current;
+    if (finalTranscript) {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      runMemoryWorker(finalTranscript, apiKey);
+      transcriptRef.current = '';
+    }
+
     if (wsRef.current) {
       wsRef.current.onclose = null;
       wsRef.current.close();
@@ -430,9 +591,16 @@ export function useLiveSession() {
       clearInterval(videoIntervalRef.current);
       videoIntervalRef.current = null;
     }
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+      sessionTimeoutRef.current = null;
+    }
   };
 
   const disconnect = useCallback(() => {
+    resumptionTokenRef.current = null; // Clear token on manual disconnect
+    isReconnectingRef.current = false;
+    pendingUserDraftRef.current = '';
     cleanup();
     setState('idle');
     setErrorMsg('');
