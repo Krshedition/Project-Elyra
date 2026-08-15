@@ -23,6 +23,8 @@ export default defineConfig({
                 'os',
                 'events',
                 'child_process',
+                'playwright',
+                '@google/genai',
                 /\.node$/
               ]
             }

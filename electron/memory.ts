@@ -163,13 +163,29 @@ Return ONLY a raw JSON object strictly matching this schema:
 Transcript:
 ${transcript}`;
     
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json"
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+    } catch (apiErr: any) {
+      if (apiErr.message && apiErr.message.includes('429')) {
+        console.warn("Memory Worker: API Rate Limit Exceeded (429). Waiting 60 seconds before retrying...");
+        await new Promise(r => setTimeout(r, 60000));
+        // Retry one time
+        response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: { responseMimeType: "application/json" }
+        });
+      } else {
+        throw apiErr;
       }
-    });
+    }
     
     if (response.text) {
       let jsonStr = response.text.trim();

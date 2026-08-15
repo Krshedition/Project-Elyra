@@ -55,5 +55,35 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
   setWindowMode(mode: 'compact' | 'expanded') {
     return ipcRenderer.send('set-window-mode', mode)
+  },
+  browserNavigate(url: string) {
+    return ipcRenderer.invoke('browser:navigate', url)
+  },
+  browserClickText(text: string) {
+    return ipcRenderer.invoke('browser:clickText', text)
+  },
+  browserTypeInput(selector: string | undefined, text: string, pressEnter: boolean) {
+    return ipcRenderer.invoke('browser:typeInput', { selector, text, pressEnter })
+  },
+  browserClickVideo() {
+    return ipcRenderer.invoke('browser:clickVideo')
+  },
+  browserScroll(direction: 'up' | 'down' | 'top' | 'bottom') {
+    return ipcRenderer.invoke('browser:scroll', direction)
+  },
+  browserAnalyzePage() {
+    return ipcRenderer.invoke('browser:analyzePage')
+  },
+  browserClickElement(id: number) {
+    return ipcRenderer.invoke('browser:clickElement', id)
+  },
+  browserFillForm(fields: {id: number, text: string}[]) {
+    return ipcRenderer.invoke('browser:fillForm', fields)
+  },
+  browserCloseTab() {
+    return ipcRenderer.invoke('browser:closeTab')
+  },
+  browserPressKey(key: string) {
+    return ipcRenderer.invoke('browser:pressKey', key)
   }
 })

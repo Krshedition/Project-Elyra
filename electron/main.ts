@@ -45,13 +45,28 @@ let pendingMemoryTask: Promise<void> | null = null;
 let isQuitting = false;
 
 app.on('before-quit', (e) => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  
   if (pendingMemoryTask && !isQuitting) {
     e.preventDefault();
     console.log('Main Process: Waiting for memory worker to finish before quitting...');
-    pendingMemoryTask.then(() => {
+    
+    // Run cleanup tasks
+    Promise.all([
+      pendingMemoryTask,
+      DirectBrowserEngine.getInstance().stop().catch(console.error)
+    ]).then(() => {
       isQuitting = true;
       app.quit();
     });
+  } else if (!isQuitting) {
+    e.preventDefault();
+    DirectBrowserEngine.getInstance().stop()
+      .catch(console.error)
+      .finally(() => {
+        isQuitting = true;
+        app.quit();
+      });
   }
 });
 
@@ -110,6 +125,56 @@ ipcMain.handle('process-memory-worker', async (event, { transcript, apiKey }) =>
   return true;
 });
 
+ipcMain.handle('browser:navigate', async (event, url: string) => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().navigate(url);
+});
+
+ipcMain.handle('browser:clickText', async (event, text: string) => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().clickByText(text);
+});
+
+ipcMain.handle('browser:typeInput', async (event, payload: { selector?: string, text: string, pressEnter: boolean }) => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().typeInput(payload.selector, payload.text, payload.pressEnter);
+});
+
+ipcMain.handle('browser:clickVideo', async () => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().clickFirstYouTubeVideo();
+});
+
+ipcMain.handle('browser:scroll', async (event, direction: 'up' | 'down' | 'top' | 'bottom') => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().scroll(direction);
+});
+
+ipcMain.handle('browser:analyzePage', async () => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().analyzePage();
+});
+
+ipcMain.handle('browser:clickElement', async (event, id: number) => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().clickElement(id);
+});
+
+ipcMain.handle('browser:fillForm', async (event, fields: {id: number, text: string}[]) => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().fillForm(fields);
+});
+
+ipcMain.handle('browser:closeTab', async () => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().closeTab();
+});
+
+ipcMain.handle('browser:pressKey', async (event, key: string) => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().pressKey(key);
+});
+
 ipcMain.handle('search-memory', async (event, query: string) => {
   const { searchFacts } = require('./memory');
   return searchFacts(query);
@@ -165,6 +230,9 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
   initMemory();
+  const { DirectBrowserEngine } = require('./browser_service');
+  DirectBrowserEngine.getInstance().start().catch(console.error);
+
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     if (permission === 'media') {
       callback(true);

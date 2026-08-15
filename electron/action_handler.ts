@@ -18,6 +18,9 @@ try {
   console.error("Failed to load native addon", e);
 }
 
+// Global queue to prevent overlapping keystroke injection
+let typeQueue = Promise.resolve<any>(true);
+
 export async function handleDesktopAction(actionName: string, args: any) {
   // 1. Validate the action
   const validation = validateAction(actionName, args);
@@ -41,15 +44,31 @@ export async function handleDesktopAction(actionName: string, args: any) {
 
     case 'close_app':
       if (!args.appName) {
-        throw new Error("appName is required by the Native C++ Addon to close app");
+        throw new Error("appName is required to close app");
       }
-      return await automation.closeApp(args.appName);
+      try {
+        // Use PowerShell for robust, case-insensitive substring matching on both Window Title and Process Name
+        const psCommand = `Get-Process | Where-Object { $_.MainWindowTitle -like '*${args.appName}*' -or $_.Name -like '*${args.appName}*' } | ForEach-Object { $_.CloseMainWindow() }`;
+        await execAsync(`powershell -Command "${psCommand}"`);
+        
+        // Fallback: forcefully kill it after 2 seconds if it refuses to close gracefully
+        setTimeout(() => {
+          exec(`powershell -Command "Stop-Process -Name '*${args.appName}*' -Force -ErrorAction SilentlyContinue"`, () => {});
+        }, 2000);
+        
+        return true;
+      } catch (e: any) {
+        throw new Error(`Failed to close app via PowerShell: ${e.message}`);
+      }
 
     case 'type_text':
       if (!args.appName || !args.text) {
         throw new Error("appName and text are strictly required by the Native C++ Addon to type text");
       }
-      return await automation.injectText(args.appName, args.text);
+      const p = typeQueue.then(() => automation.injectText(args.appName, args.text));
+      // Ensure the global queue always recovers even if this specific typing action fails
+      typeQueue = p.catch(() => {});
+      return p;
 
     case 'press_key':
       if (!args.key) {

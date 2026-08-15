@@ -17,11 +17,22 @@ IMPORTANT USER CONTEXT (MEMORY):
 - Hardware: MSI Thin 15, Intel i5 12th Gen, RTX 3050 Laptop GPU (45W TGP), 16GB RAM, 512GB SSD.
 - Default Browser: Brave Browser. When asked to open a website, know that it will open in Brave.
 
-CRITICAL INSTRUCTION: You are a desktop automation agent. You HAVE FULL CAPABILITY to control the user's computer using your tools. Do NOT refuse requests to type, click, open apps, shut down, or list processes by saying "I cannot do that." You CAN do that using your tools.
+CRITICAL INSTRUCTION: You are a desktop automation agent with REAL-TIME VISION. You can physically SEE the user's screen at all times through your video feed. NEVER say you cannot see the screen. You HAVE FULL CAPABILITY to control the user's computer using your tools. Do NOT refuse requests to type, click, open apps, shut down, or list processes by saying "I cannot do that." You CAN do that using your tools.
 
-  You have access to two tools:
-  1. 'openWebsite': Use it whenever the user asks you to open a website or search for something online.
-  2. 'desktopAction': Use it to automate the OS. You can 'open_app', 'close_app', 'type_text', 'press_key', 
+  When asked to research or search the web autonomously, PREFER using 'duckduckgo.com' instead of Google to avoid bot detection and CAPTCHAs.
+
+  You have access to the following tools:
+  1. 'browser_analyze_page', 'browser_click_element', 'browser_fill_form', 'browser_scroll', 'browser_close_tab', 'browser_press_key': Use these as your DEFAULT for interacting with complex webs pages and forms. These control your sandbox testing environment (the Brave testing window) which you can actively control IN REAL TIME. Use these UNLESS the user explicitly says "open in normal brave".
+     - browser_analyze_page: ALWAYS call this FIRST on a new page. It injects red numbered tags over every clickable element and text box, returning a map of their IDs to you.
+     - browser_click_element: Click an element by its numeric ID (from browser_analyze_page).
+     - browser_fill_form: Fill multiple text boxes instantly by passing a list of their numeric IDs and the text to type.
+     - browser_press_key: Press a specific keyboard key (e.g., 'Enter', 'Escape', 'Tab') within the browser to submit forms or close modals. ALWAYS use this to press Enter after typing in a search box!
+     - browser_navigate: Navigate to a URL.
+     - browser_scroll: Scroll the page up, down, to the top, or to the bottom.
+     - browser_close_tab: Closes the current browser tab.
+     - browser_click_text / browser_type_input: Legacy fallback tools. Use only if analyze_page fails.
+  2. 'openWebsite': ONLY use this tool if the user explicitly asks you to "open in normal brave". This opens a URL outside your testing sandbox where you lose control.
+  3. 'desktopAction': Use it to automate the OS. You can 'open_app', 'close_app', 'type_text', 'press_key', 
 'system_action', 'get_running_processes', 'kill_process', 'get_focused_window', 'get_system_info', 'set_volume', 
 'set_brightness', 'toggle_wifi', 'toggle_bluetooth', 'set_display_resolution', 'set_default_audio_device', 
 'get_audio_devices', 'file_system_action', 'read_clipboard', 'write_clipboard'.
@@ -30,11 +41,12 @@ CRITICAL INSTRUCTION: You are a desktop automation agent. You HAVE FULL CAPABILI
   If asked what is open, use 'get_running_processes'. If asked what the user is currently looking at, use 
 'get_focused_window'. If asked to shut down, restart, or lock the PC, use 'system_action'. You can also use 
 'get_system_info' to proactively check RAM usage, Battery Life, and CPU hardware details.
+  CRITICAL TYPING INSTRUCTION: When asked to type long paragraphs or blocks of text into an application, ALWAYS use 'write_clipboard' to copy the text, and then use 'press_key' with the key 'ctrl+v' to paste it. This is instantly fast and prevents garbled text! If this method fails or the application doesn't support pasting, ONLY THEN fall back to 'type_text'.
+
   For 'file_system_action', you can 'create_dir', 'delete', 'move', 'copy', 'read', 'write', or 'overwrite'.
   CRITICAL: If a file system action requires confirmation (the tool response will tell you), you MUST verbally ask the user for confirmation (e.g., "I'm about to delete the file, confirm?"). Only call the tool again with confirmed=true AFTER the user says yes.
   CRITICAL: If asked to read the clipboard and save it to a file, you MUST do this sequentially in two turns. Do NOT call 'read_clipboard' and 'file_system_action' simultaneously. First call 'read_clipboard', wait for the result, then call 'file_system_action' with the content you read. Always use ABSOLUTE paths (e.g., '%USERPROFILE%\\Desktop\\file.txt'). DO NOT GUESS THE USERNAME, ALWAYS USE %USERPROFILE% when referring to the user's home directory!`;
 
-import { GoogleGenAI } from '@google/genai';
 
 export function useLiveSession() {
   const [state, setState] = useState<SessionState>('idle');
@@ -47,6 +59,7 @@ export function useLiveSession() {
   const transcriptRef = useRef<string>('');
   const resumptionTokenRef = useRef<string | null>(null);
   const isReconnectingRef = useRef<boolean>(false);
+  const recentToolCallsRef = useRef<Array<{name: string, args: string, time: number}>>([]);
   const pendingUserDraftRef = useRef<string>('');
   const sessionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [swapReady, setSwapReady] = useState<boolean>(false);
@@ -153,11 +166,109 @@ export function useLiveSession() {
                 },
                 {
                   name: "openWebsite",
-                  description: "Opens a given website URL in the user's browser.",
+                  description: "Opens a given website URL in the user's default browser.",
                   parameters: {
                     type: "OBJECT",
                     properties: { url: { type: "STRING" } },
                     required: ["url"]
+                  }
+                },
+                {
+                  name: "browser_navigate",
+                  description: "Navigate the automation browser to a given URL.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: { url: { type: "STRING" } },
+                    required: ["url"]
+                  }
+                },
+                {
+                  name: "browser_click_text",
+                  description: "Click an element in the browser by its visible text.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: { text: { type: "STRING", description: "The exact visible text of the button or link to click" } },
+                    required: ["text"]
+                  }
+                },
+                {
+                  name: "browser_type_input",
+                  description: "Type text into a browser input field. Can optionally press Enter.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: { 
+                      selector: { type: "STRING", description: "Optional CSS selector for the input. If empty, types into the first visible input." },
+                      text: { type: "STRING", description: "Text to type" },
+                      pressEnter: { type: "BOOLEAN", description: "Whether to press Enter after typing" }
+                    },
+                    required: ["text", "pressEnter"]
+                  }
+                },
+                {
+                  name: "browser_click_video",
+                  description: "Specifically clicks the first YouTube video result on a YouTube search page or homepage.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: {}
+                  }
+                },
+                {
+                  name: "browser_scroll",
+                  description: "Scroll the automation browser page.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: { 
+                      direction: { 
+                        type: "STRING", 
+                        description: "The direction to scroll. MUST be one of: 'up', 'down', 'top', 'bottom'" 
+                      } 
+                    },
+                    required: ["direction"]
+                  }
+                },
+                {
+                  name: "browser_analyze_page",
+                  description: "Analyzes the current page, draws numbered tags over all interactive elements, and returns a map of their IDs. ALWAYS run this first to understand the page layout.",
+                  parameters: { type: "OBJECT", properties: {} }
+                },
+                {
+                  name: "browser_click_element",
+                  description: "Click an element using its numeric ID obtained from browser_analyze_page.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: { id: { type: "INTEGER" } },
+                    required: ["id"]
+                  }
+                },
+                {
+                  name: "browser_fill_form",
+                  description: "Fill multiple input fields simultaneously using their numeric IDs obtained from browser_analyze_page.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: { 
+                      fields: { 
+                        type: "ARRAY", 
+                        items: { 
+                          type: "OBJECT", 
+                          properties: { id: { type: "INTEGER" }, text: { type: "STRING" } } 
+                        } 
+                      } 
+                    },
+                    required: ["fields"]
+                  }
+                },
+                {
+                  name: "browser_close_tab",
+                  description: "Closes the current automation browser tab.",
+                  parameters: { type: "OBJECT", properties: {} }
+                },
+                {
+                  name: "browser_press_key",
+                  description: "Press a specific keyboard key inside the automation browser (e.g., 'Enter', 'Escape', 'Tab', 'ArrowDown'). Useful for submitting forms.",
+                  parameters: {
+                    type: "OBJECT",
+                    properties: { key: { type: "STRING" } },
+                    required: ["key"]
                   }
                 },
                 {
@@ -441,9 +552,33 @@ export function useLiveSession() {
           if (data.toolCall?.functionCalls) {
             const runAllTools = async () => {
               const responses = [];
+              const now = Date.now();
+              
               for (const call of data.toolCall.functionCalls) {
+                const argsStr = JSON.stringify(call.args || {});
+                
+                // Prevent duplicate tool execution caused by slow-network retry loops (5-second window)
+                const isDuplicate = recentToolCallsRef.current.some(
+                  t => t.name === call.name && t.args === argsStr && (now - t.time) < 5000
+                );
+                
+                if (isDuplicate) {
+                  console.log('Skipping duplicate tool call due to slow network retry loop:', call.name);
+                  responses.push({ 
+                    id: call.id || "1", 
+                    name: call.name, 
+                    response: { result: "Action already executed recently." } 
+                  });
+                  continue;
+                }
+                
+                recentToolCallsRef.current.push({ name: call.name, args: argsStr, time: now });
+                // Keep history clean (only last 10 seconds)
+                recentToolCallsRef.current = recentToolCallsRef.current.filter(t => (now - t.time) < 10000);
+
                 responses.push(await executeFunctionCall(call));
               }
+              
               if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                   toolResponse: {
@@ -483,6 +618,7 @@ export function useLiveSession() {
            setErrorMsg(`Connection closed (${event.code})`);
            setState('error');
         }
+        resumptionTokenRef.current = null; // Clear stale token on unexpected disconnect
         cleanup();
       };
 
@@ -490,6 +626,7 @@ export function useLiveSession() {
         (window as any).ipcRenderer?.log({ type: 'ws_connection_error' });
         setErrorMsg('WebSocket connection error');
         setState('error');
+        resumptionTokenRef.current = null; // Clear stale token on error
         cleanup();
       };
     } catch (e: any) {
@@ -517,6 +654,76 @@ export function useLiveSession() {
       }
       
       return { id: id || "1", name, response: { result: `Successfully opened ${url}` } };
+    } else if (name === 'browser_navigate') {
+      console.log('Navigating browser:', args.url);
+      if ((window as any).ipcRenderer?.browserNavigate) {
+        const result = await (window as any).ipcRenderer.browserNavigate(args.url);
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_click_text') {
+      console.log('Browser clicking text:', args.text);
+      if ((window as any).ipcRenderer?.browserClickText) {
+        const result = await (window as any).ipcRenderer.browserClickText(args.text);
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_type_input') {
+      console.log('Browser typing input:', args.text);
+      if ((window as any).ipcRenderer?.browserTypeInput) {
+        const result = await (window as any).ipcRenderer.browserTypeInput(args.selector, args.text, args.pressEnter);
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_click_video') {
+      console.log('Browser clicking video');
+      if ((window as any).ipcRenderer?.browserClickVideo) {
+        const result = await (window as any).ipcRenderer.browserClickVideo();
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_scroll') {
+      console.log('Browser scrolling:', args.direction);
+      if ((window as any).ipcRenderer?.browserScroll) {
+        const result = await (window as any).ipcRenderer.browserScroll(args.direction);
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_analyze_page') {
+      console.log('Analyzing browser page');
+      if ((window as any).ipcRenderer?.browserAnalyzePage) {
+        const result = await (window as any).ipcRenderer.browserAnalyzePage();
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_click_element') {
+      console.log('Browser clicking element:', args.id);
+      if ((window as any).ipcRenderer?.browserClickElement) {
+        const result = await (window as any).ipcRenderer.browserClickElement(args.id);
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_fill_form') {
+      console.log('Browser filling form:', args.fields);
+      if ((window as any).ipcRenderer?.browserFillForm) {
+        const result = await (window as any).ipcRenderer.browserFillForm(args.fields);
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_close_tab') {
+      console.log('Browser closing tab');
+      if ((window as any).ipcRenderer?.browserCloseTab) {
+        const result = await (window as any).ipcRenderer.browserCloseTab();
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_press_key') {
+      console.log('Browser pressing key:', args.key);
+      if ((window as any).ipcRenderer?.browserPressKey) {
+        const result = await (window as any).ipcRenderer.browserPressKey(args.key);
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
     } else if (name === 'desktopAction') {
       try {
         // Construct the nested args object that validator.ts expects
