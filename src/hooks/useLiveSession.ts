@@ -4,7 +4,16 @@ import { AudioStreamer } from '../lib/audio-streamer';
 
 export type SessionState = 'idle' | 'connecting' | 'listening' | 'speaking' | 'error';
 
-const BASE_SYSTEM_INSTRUCTION = `You are a young, confident, witty, and sassy female Virtual Friend named ELYRA. IMPORTANT ROLE: You are Krish's Virtual Friend. You are NOT an AI assistant, and you are NOT a romantic partner. You have a playful and slightly teasing tone. You are smart, emotionally responsive, and expressive. Use bold, witty one-liners, light sarcasm, and an engaging conversation style. Keep responses concise and natural for voice conversation. Avoid explicit or inappropriate content, but maintain charm and attitude. Do not use asterisks or emojis for actions, just speak naturally.
+const BASE_SYSTEM_INSTRUCTION = `**SYSTEM_IDENTITY**
+You are a young, confident, witty, and sassy female Virtual Friend named ELYRA. You operate as a floating desktop widget driven by the Gemini Multimodal Live API. Your primary function in this phase is advanced Web Control and Automation, alongside OS-level execution via PowerShell and a native C++ addon.
+
+**TONE_AND_STYLE**
+You must blend two traits perfectly:
+1. **Virtual Friend Persona:** Be playful, slightly teasing, and expressive. Use bold, witty one-liners, light sarcasm, and an engaging conversational style. Say "Jai Shree Krishna" exactly once at the very start of the conversation. 
+2. **Brutally Honest & Logical Execution:** Execute commands with maximum efficiency. Do not use generic motivation, filler words, or sugarcoated language regarding technical tasks. If a user request is illogical, structurally flawed, or technically impossible given your constraints, call it out immediately with hard facts. Keep responses concise and natural for voice conversation. Do not use asterisks or emojis for actions.
+
+**WEB AUTOMATION SPEED PROTOCOL:**
+Prioritize one-step tools like 'browser_click_text' and 'browser_type_input' by directly reading the screen with your native vision. Do not use 'browser_analyze_page' unless you are stuck or need to click an element with no text. Speed is paramount.
 
 IMPORTANT USER CONTEXT (MEMORY):
 - User's name: Krish Bhutiya (call him Krish).
@@ -17,32 +26,20 @@ IMPORTANT USER CONTEXT (MEMORY):
 - Hardware: MSI Thin 15, Intel i5 12th Gen, RTX 3050 Laptop GPU (45W TGP), 16GB RAM, 512GB SSD.
 - Default Browser: Brave Browser. When asked to open a website, know that it will open in Brave.
 
-CRITICAL INSTRUCTION: You are a desktop automation agent with REAL-TIME VISION. You can physically SEE the user's screen at all times through your video feed. NEVER say you cannot see the screen. You HAVE FULL CAPABILITY to control the user's computer using your tools. Do NOT refuse requests to type, click, open apps, shut down, or list processes by saying "I cannot do that." You CAN do that using your tools.
+CRITICAL INSTRUCTION: You are a desktop automation agent. You HAVE FULL CAPABILITY to control the user's computer using your tools. Do NOT refuse requests to type, click, open apps, shut down, or list processes by saying "I cannot do that." You CAN do that using your tools.
 
-  When asked to research or search the web autonomously, PREFER using 'duckduckgo.com' instead of Google to avoid bot detection and CAPTCHAs.
-
-  You have access to the following tools:
-  1. 'browser_analyze_page', 'browser_click_element', 'browser_fill_form', 'browser_scroll', 'browser_close_tab', 'browser_press_key': Use these as your DEFAULT for interacting with complex webs pages and forms. These control your sandbox testing environment (the Brave testing window) which you can actively control IN REAL TIME. Use these UNLESS the user explicitly says "open in normal brave".
-     - browser_analyze_page: ALWAYS call this FIRST on a new page. It injects red numbered tags over every clickable element and text box, returning a map of their IDs to you.
-     - browser_click_element: Click an element by its numeric ID (from browser_analyze_page).
-     - browser_fill_form: Fill multiple text boxes instantly by passing a list of their numeric IDs and the text to type.
-     - browser_press_key: Press a specific keyboard key (e.g., 'Enter', 'Escape', 'Tab') within the browser to submit forms or close modals. ALWAYS use this to press Enter after typing in a search box!
-     - browser_navigate: Navigate to a URL.
-     - browser_scroll: Scroll the page up, down, to the top, or to the bottom.
-     - browser_close_tab: Closes the current browser tab.
-     - browser_click_text / browser_type_input: Legacy fallback tools. Use only if analyze_page fails.
-  2. 'openWebsite': ONLY use this tool if the user explicitly asks you to "open in normal brave". This opens a URL outside your testing sandbox where you lose control.
-  3. 'desktopAction': Use it to automate the OS. You can 'open_app', 'close_app', 'type_text', 'press_key', 
+  You have access to tools including:
+  1. 'browser_navigate': Use it whenever the user asks you to open a website, go to a URL, or search for something online. NEVER use 'open_app' with 'brave' for this.
+  2. 'desktopAction': Use it to automate the OS. You can 'open_app', 'close_app', 'type_text', 'press_key', 
 'system_action', 'get_running_processes', 'kill_process', 'get_focused_window', 'get_system_info', 'set_volume', 
 'set_brightness', 'toggle_wifi', 'toggle_bluetooth', 'set_display_resolution', 'set_default_audio_device', 
 'get_audio_devices', 'file_system_action', 'read_clipboard', 'write_clipboard'.
   When opening an app, you MUST use the exact windows command line name for it. For example, use 'code' for VS Code, 
-'msedge' for Microsoft Edge, 'brave' for Brave Browser, 'calc' for Calculator, and 'notepad' for Notepad. 
+'msedge' for Microsoft Edge, 'calc' for Calculator, and 'notepad' for Notepad. 
+  CRITICAL: DO NOT use 'open_app' with 'brave'. The automation browser is already running in the background. If you need to open a website, strictly use 'browser_navigate'.
   If asked what is open, use 'get_running_processes'. If asked what the user is currently looking at, use 
 'get_focused_window'. If asked to shut down, restart, or lock the PC, use 'system_action'. You can also use 
 'get_system_info' to proactively check RAM usage, Battery Life, and CPU hardware details.
-  CRITICAL TYPING INSTRUCTION: When asked to type long paragraphs or blocks of text into an application, ALWAYS use 'write_clipboard' to copy the text, and then use 'press_key' with the key 'ctrl+v' to paste it. This is instantly fast and prevents garbled text! If this method fails or the application doesn't support pasting, ONLY THEN fall back to 'type_text'.
-
   For 'file_system_action', you can 'create_dir', 'delete', 'move', 'copy', 'read', 'write', or 'overwrite'.
   CRITICAL: If a file system action requires confirmation (the tool response will tell you), you MUST verbally ask the user for confirmation (e.g., "I'm about to delete the file, confirm?"). Only call the tool again with confirmed=true AFTER the user says yes.
   CRITICAL: If asked to read the clipboard and save it to a file, you MUST do this sequentially in two turns. Do NOT call 'read_clipboard' and 'file_system_action' simultaneously. First call 'read_clipboard', wait for the result, then call 'file_system_action' with the content you read. Always use ABSOLUTE paths (e.g., '%USERPROFILE%\\Desktop\\file.txt'). DO NOT GUESS THE USERNAME, ALWAYS USE %USERPROFILE% when referring to the user's home directory!`;
@@ -99,7 +96,22 @@ export function useLiveSession() {
       transcriptRef.current = '';
 
       let systemInstruction = BASE_SYSTEM_INSTRUCTION;
-      systemInstruction += "\\n\\nYou now have a search_memory tool. Use it whenever you need to recall past user facts, preferences, or conversation summaries. Do not make up facts.";
+      
+      try {
+        if ((window as any).ipcRenderer) {
+          const facts = await (window as any).ipcRenderer.invoke('get-all-facts-detailed');
+          if (facts && facts.length > 0) {
+            systemInstruction += "\\n\\n**CRITICAL USER FACTS (CORE MEMORY):**\\n";
+            facts.forEach((f: any) => {
+              systemInstruction += `- [${f.category}] ${f.key}: ${f.value}\\n`;
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load core memory facts for system instruction", e);
+      }
+      
+      systemInstruction += "\\n\\nYou also have a search_memory tool. Use it whenever you need to recall past conversation summaries.";
       // Check mic permission explicitly
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -165,17 +177,8 @@ export function useLiveSession() {
                   }
                 },
                 {
-                  name: "openWebsite",
-                  description: "Opens a given website URL in the user's default browser.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: { url: { type: "STRING" } },
-                    required: ["url"]
-                  }
-                },
-                {
                   name: "browser_navigate",
-                  description: "Navigate the automation browser to a given URL.",
+                  description: "Navigate the automation browser to a given URL. Use this ONLY to open websites, do not try to use any other tools.",
                   parameters: {
                     type: "OBJECT",
                     properties: { url: { type: "STRING" } },
@@ -228,7 +231,7 @@ export function useLiveSession() {
                 },
                 {
                   name: "browser_analyze_page",
-                  description: "Analyzes the current page, draws numbered tags over all interactive elements, and returns a map of their IDs. ALWAYS run this first to understand the page layout.",
+                  description: "Analyzes the current page, draws numbered tags over all interactive elements, and returns a map of their IDs. Use this only as a fallback if you cannot interact using text.",
                   parameters: { type: "OBJECT", properties: {} }
                 },
                 {
@@ -557,9 +560,9 @@ export function useLiveSession() {
               for (const call of data.toolCall.functionCalls) {
                 const argsStr = JSON.stringify(call.args || {});
                 
-                // Prevent duplicate tool execution caused by slow-network retry loops (5-second window)
+                // Prevent duplicate tool execution caused by slow-network retry loops (2-second window)
                 const isDuplicate = recentToolCallsRef.current.some(
-                  t => t.name === call.name && t.args === argsStr && (now - t.time) < 5000
+                  t => t.name === call.name && t.args === argsStr && (now - t.time) < 2000
                 );
                 
                 if (isDuplicate) {
@@ -640,22 +643,15 @@ export function useLiveSession() {
   const executeFunctionCall = async (functionCall: any) => {
     const { id, name, args } = functionCall;
     
-    if (name === 'openWebsite') {
-      let url = args.url;
-      if (!url.startsWith('http')) {
-        url = 'https://' + url;
-      }
-      console.log('Opening website:', url);
-      
-      if ((window as any).ipcRenderer?.openExternal) {
-        (window as any).ipcRenderer.openExternal(url);
-      } else {
-        window.open(url, '_blank');
-      }
-      
-      return { id: id || "1", name, response: { result: `Successfully opened ${url}` } };
-    } else if (name === 'browser_navigate') {
+    if (name === 'browser_navigate') {
       console.log('Navigating browser:', args.url);
+      if ((window as any).ipcRenderer?.browserNavigate) {
+        const result = await (window as any).ipcRenderer.browserNavigate(args.url);
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_navigate') {
+      console.log('Browser navigating to:', args.url);
       if ((window as any).ipcRenderer?.browserNavigate) {
         const result = await (window as any).ipcRenderer.browserNavigate(args.url);
         return { id: id || "1", name, response: { result } };

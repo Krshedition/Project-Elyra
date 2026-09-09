@@ -146,7 +146,18 @@ export async function runMemoryWorkerMain(transcript: string, apiKey: string) {
     console.log('Main Process: Running memory worker...');
     const { GoogleGenAI } = require('@google/genai');
     const ai = new GoogleGenAI({ apiKey });
+    
+    // Fetch existing keys to prevent duplicates
+    let existingKeysStr = "";
+    try {
+      const existingFacts = getAllFacts();
+      existingKeysStr = Object.keys(existingFacts).join(", ");
+    } catch (e) {}
+
     const prompt = `Analyze the following conversation transcript. Extract a 2-sentence summary of what happened. Also extract both EXPLICIT facts and IMPLICIT deductions about the user AND their relationships/environment (e.g., tech stack preferences, active projects, habits, names of friends/family, birthdays, important dates).
+
+IMPORTANT: Here are the user's EXISTING memory keys: [${existingKeysStr}]
+If a fact you extract is logically the same as or an update to an existing key, you MUST reuse the exact same existing key to overwrite it, rather than creating a duplicate (e.g., if you know 'user_date_of_birth', do not create 'date_of_birth'). Do not extract trivial or temporary details. Only extract permanent facts.
 
 Return ONLY a raw JSON object strictly matching this schema:
 {

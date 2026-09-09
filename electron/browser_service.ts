@@ -1,8 +1,11 @@
-import { chromium, BrowserContext, Page } from 'playwright';
+import { chromium, BrowserContext, Page, Browser } from 'playwright';
 import * as fs from 'fs';
+import * as path from 'path';
+import { exec } from 'child_process';
 
 export class DirectBrowserEngine {
   private static instance: DirectBrowserEngine;
+  private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private page: Page | null = null;
 
@@ -16,60 +19,148 @@ export class DirectBrowserEngine {
   }
 
   public async start() {
-    if (!this.context) {
-      const BRAVE_PATH = process.env.LOCALAPPDATA + '\\BraveSoftware\\Brave-Browser\\Application\\brave.exe';
-      const userDataDir = process.env.LOCALAPPDATA + '\\Elyra\\BraveAgentProfile';
-      
-      const launchOptions: any = { 
-        headless: false,
-        viewport: { width: 1280, height: 720 },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        ignoreDefaultArgs: ['--enable-automation'],
-        args: ['--disable-infobars']
-      };
-      
-      if (fs.existsSync(BRAVE_PATH)) {
-        launchOptions.executablePath = BRAVE_PATH;
-      } else {
-        console.warn(`Brave browser not found at ${BRAVE_PATH}. Falling back to default chromium.`);
-      }
+    if (!this.browser || !this.browser.isConnected()) {
+      try {
+        console.log('Attempting to connect to official Brave browser via CDP...');
+        this.browser = await chromium.connectOverCDP('http://localhost:9222');
+        this.context = this.browser.contexts()[0];
+        this.page = await this.getActivePage();
+      } catch (err) {
+        console.log('CDP connection failed. Launching Brave with remote debugging...');
+        
+        // Check both common install locations
+        const SYSTEM_BRAVE = 'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe';
+        const LOCAL_BRAVE = path.join(process.env.LOCALAPPDATA || '', 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe');
+        
+        let targetPath = fs.existsSync(SYSTEM_BRAVE) ? SYSTEM_BRAVE : (fs.existsSync(LOCAL_BRAVE) ? LOCAL_BRAVE : null);
+        
+        if (targetPath) {
+          // Check if Brave is already running without remote debugging enabled
+          const { execSync } = require('child_process');
+          let isRunning = false;
+          try {
+            const tasklist = execSync('tasklist /fi "imagename eq brave.exe"', { encoding: 'utf8' });
+            if (tasklist.toLowerCase().includes('brave.exe')) {
+              isRunning = true;
+            }
+          } catch (e) {}
 
-      this.context = await chromium.launchPersistentContext(userDataDir, launchOptions);
-      this.page = this.context.pages()[0] || await this.context.newPage();
+          if (isRunning) {
+            console.log('Brave is currently running without remote debugging. Gracefully restarting with remote debugging enabled...');
+            try {
+              execSync('taskkill /IM brave.exe /F', { stdio: 'ignore' });
+              await new Promise(r => setTimeout(r, 1000));
+            } catch (e) {}
+          }
+
+          // Launch user's ACTUAL Brave app with remote debugging and session restore (no sandbox profile!)
+          exec(`"${targetPath}" --remote-debugging-port=9222 --restore-last-session`);
+          
+          // Poll port 9222 until ready (up to 8 seconds, checking every 300ms)
+          let connected = false;
+          for (let i = 0; i < 26; i++) {
+            try {
+              const res = await fetch('http://localhost:9222/json/version');
+              if (res.ok) {
+                connected = true;
+                break;
+              }
+            } catch (e) {}
+            await new Promise(r => setTimeout(r, 300));
+          }
+
+          if (!connected) {
+            throw new Error("Failed to connect to Brave CDP after launching.");
+          }
+          
+          this.browser = await chromium.connectOverCDP('http://localhost:9222');
+          this.context = this.browser.contexts()[0];
+          this.page = await this.getActivePage();
+        } else {
+          throw new Error("Brave browser not found in standard paths.");
+        }
+      }
     }
   }
 
   public async stop() {
-    if (this.context) {
-      await this.context.close();
+    if (this.browser) {
+      await this.browser.close(); // Disconnects from CDP without killing the user's browser
+      this.browser = null;
       this.context = null;
       this.page = null;
     }
+  }
+
+  private async getActivePage(): Promise<Page> {
+    if (!this.context) {
+      const pages = this.browser?.contexts()[0]?.pages() || [];
+      if (pages.length > 0) this.context = this.browser!.contexts()[0];
+    }
+
+    if (!this.context) {
+      throw new Error("No browser context available.");
+    }
+
+    const pages = this.context.pages().filter(p => !p.isClosed());
+    if (pages.length === 0) {
+      this.page = await this.context.newPage();
+      return this.page;
+    }
+
+    // Identify the active/focused tab that the user is currently looking at in Brave
+    for (const p of pages) {
+      try {
+        const isVisible = await p.evaluate(() => document.visibilityState === 'visible');
+        if (isVisible) {
+          this.page = p;
+          return p;
+        }
+      } catch (e) {}
+    }
+
+    // If previously tracked page is still open, reuse it
+    if (this.page && !this.page.isClosed()) {
+      return this.page;
+    }
+
+    // Otherwise use the last active tab in the browser
+    this.page = pages[pages.length - 1];
+    return this.page;
   }
 
   private async ensurePage(): Promise<Page> {
     try {
-      if (this.page && this.page.isClosed()) {
-        console.log('Browser page was closed manually. Restarting engine...');
-        this.page = null;
+      if (this.browser && !this.browser.isConnected()) {
+        this.browser = null;
         this.context = null;
+        this.page = null;
       }
     } catch (e) {
-      this.page = null;
+      this.browser = null;
       this.context = null;
+      this.page = null;
     }
 
-    if (!this.page) {
+    if (!this.browser || !this.context) {
       await this.start();
     }
-    return this.page!;
+
+    return await this.getActivePage();
   }
 
   public async navigate(url: string): Promise<string> {
     try {
-      const page = await this.ensurePage();
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      return `Navigated to ${url}`;
+      const page = await this.getActivePage();
+      
+      let finalUrl = url;
+      if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+        finalUrl = `https://${finalUrl}`;
+      }
+      
+      await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.bringToFront();
+      return `Navigated to ${finalUrl}`;
     } catch (err: any) {
       return `Failed to navigate: ${err.message}`;
     }
@@ -109,8 +200,8 @@ export class DirectBrowserEngine {
       if (selector) {
         targetLocator = page.locator(selector).first();
       } else {
-        // Fallback: look for generic visible input or textarea
-        targetLocator = page.locator('input:visible, textarea:visible').first();
+        // Fallback: look for generic visible input, textarea, or contenteditable divs (e.g. Instagram/WhatsApp chats)
+        targetLocator = page.locator('input:visible, textarea:visible, [contenteditable="true"]:visible, [role="textbox"]:visible').first();
       }
 
       if (await targetLocator.count() === 0) {
@@ -188,9 +279,11 @@ export class DirectBrowserEngine {
         const elements = document.querySelectorAll('a, button, input, textarea, select, [role="button"], [role="link"], [tabindex]:not([tabindex="-1"])');
         
         elements.forEach((el) => {
+          if (counter > 200) return; // Cap at 200 elements to prevent token overflow
+
           const rect = el.getBoundingClientRect();
-          // Only tag visible elements currently within the viewport
-          if (rect.width === 0 || rect.height === 0 || rect.top < 0 || rect.left < 0 || rect.top > window.innerHeight) return;
+          // Skip elements with no dimensions
+          if (rect.width === 0 || rect.height === 0 || rect.top < 0 || rect.left < 0) return;
           
           const style = window.getComputedStyle(el);
           if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return;
@@ -289,17 +382,17 @@ export class DirectBrowserEngine {
         return "No active tab to close.";
       }
       await this.page.close();
+      this.page = null;
       
       if (this.context) {
-        const pages = this.context.pages();
+        const pages = this.context.pages().filter(p => !p.isClosed());
         if (pages.length > 0) {
           this.page = pages[pages.length - 1];
           await this.page.bringToFront();
           return "Tab closed. Switched to another open tab.";
         } else {
           this.page = null;
-          this.context = null;
-          return "Closed the last tab. Browser engine stopped.";
+          return "Closed the last tab. No more open tabs in browser.";
         }
       }
       return "Tab closed.";

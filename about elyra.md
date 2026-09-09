@@ -1,26 +1,27 @@
 ## 1. Project Overview
-Project Elyra is a highly customized, Windows-specific virtual AI desktop assistant designed for a specific user (Krish Bhutiya). Operating as a floating, frameless desktop widget, it utilizes the Gemini Multimodal Live API to provide ultra-low latency conversational AI with real-time vision capabilities. Elyra's core value proposition is full native OS automation (launching apps, injecting keystrokes, managing files) via custom C++ node addons, combined with a persistent, long-term memory system backed by a local SQLite database to organically learn user facts and session summaries over time.
+Project Elyra is a highly customized, Windows-specific virtual AI assistant designed for a specific user (Krish Bhutiya). Operating as a floating, frameless desktop widget, it utilizes the Gemini Multimodal Live API to provide ultra-low latency conversational AI with real-time vision capabilities. Currently, for its Phase 1 college presentation, Elyra is strictly focused on serving as an advanced **Web Controller and Automation System**. Its core value proposition is intelligent browser orchestration—using a persistent Playwright sandbox and dynamic DOM-tagging to allow the AI to physically "see" and autonomously navigate web pages, click elements, and fill forms without manual user input. While the foundation for native OS automation (launching apps, injecting keystrokes) exists via custom C++ node addons, this is considered the next evolution of the project. Elyra also features a persistent, long-term memory system backed by a local SQLite database to organically learn user facts and session summaries over time.
 
 ## 2. Tech Stack
-- **Electron (v42.2.0)**: Desktop application shell, handling deep OS integration, IPC bridging, and the transparent, frameless, click-through UI overlay.
+- **Electron (v42.2.0)**: Desktop application shell, handling deep system integration, IPC bridging, and the transparent, frameless, click-through UI overlay.
 - **React (v19) + Vite**: Frontend rendering layer and blazing-fast development server.
 - **TailwindCSS + Framer Motion**: Core UI styling, responsive design, and smooth micro-animations for the widget and memory manager states.
-- **@google/genai (v2.6.0)**: Official Google SDK, specifically leveraging `gemini-3.1-flash-live-preview` via WebSockets for real-time Bidi (bidirectional) audio/video streaming, and `gemini-2.5-flash` for asynchronous memory extraction.
-- **node-addon-api (N-API)**: Used to compile `elyra_automation.node`, a custom C++ native binary that bypasses Node's limitations to directly interface with Windows Win32 APIs for precise window focusing (via `AttachThreadInput`), keystroke injection, process killing, and native CoreAudio volume control (`IAudioEndpointVolume`).
-- **better-sqlite3**: Synchronous, high-performance local SQLite database engine used to store long-term context (`user_facts` and `sessions`) without cloud database overhead.
+- **@google/genai (v2.6.0)**: Official Google SDK, leveraging `gemini-3.1-flash-live-preview` via WebSockets for real-time Bidi (bidirectional) audio/video streaming.
+- **Playwright**: Core browser orchestration engine used to launch an isolated testing sandbox (Brave/Chromium), inject visual numeric tags (`[ID]`) into the DOM, and execute web-based AI commands.
+- **node-addon-api (N-API)**: Used to compile `elyra_automation.node`, a custom C++ native binary for native Windows APIs.
+- **better-sqlite3**: Synchronous, high-performance local SQLite database engine used to store long-term context without cloud overhead.
 
 ## 3. Architecture
 ### System Diagram
 ```text
-[ Windows OS ] <--> [ C++ Native Addon (elyra_automation.node) ]
+[ Windows OS ] <--> [ C++ Native Addon ] & [ Playwright Browser Service ]
                            ^
-                           | (N-API)
+                           | (IPC / Context Bridge)
 [ Electron Main Process ] (IPC Hub, SQLite Memory DB, Window Manager)
                            ^
-                           | (Context Bridge / IPC)
+                           | (WebSocket / WebRTC)
 [ Electron Renderer (React) ] <--> [ WaveWidget UI & Memory Manager ]
                            ^
-                           | (WebSocket / WebRTC)
+                           | (WebSocket Streaming)
 [ Gemini Live API (Google Cloud) ]
 ```
 
@@ -31,43 +32,40 @@ Project Elyra is a highly customized, Windows-specific virtual AI desktop assist
 4. **Response**: The server streams back Base64 PCM16 (24kHz) audio data.
 5. **Output**: The React client receives `inlineData.data`, decodes it, and feeds it into the `AudioStreamer` for playback.
 
-### WebSocket Streaming & Reconnection Logic
-The connection directly hits `wss://generativelanguage.googleapis.com/.../BidiGenerateContent`. The application implements a highly robust, state-aware session-swapping architecture to seamlessly bypass Gemini's strict 9-10 minute session time limits:
-- The server sends `sessionResumptionUpdate` tokens, which are cached in memory.
-- At 8.5 minutes, a `swapReady` flag is armed. The React UI continuously monitors the conversational state and waits until both the user and the AI are perfectly silent (`state === 'listening'`).
-- Once a gap in conversation is found, it abruptly closes the WebSocket and instantly reconnects, passing the cached handle in the `sessionResumption` config, creating a completely gapless and invisible session restart.
-- To prevent data loss when the user manually closes the app, the client asynchronously offloads the current session transcript to the main Electron process via the `process-memory-worker` IPC. Electron intercepts the `before-quit` app event to keep the process alive just long enough for the Gemini API to extract long-term memory facts before truly shutting down.
-
 ### Vision-Based Screen Capture
-WebRTC is utilized via `desktopCapturer.getSources()` (fetching the primary screen ID via IPC). `navigator.mediaDevices.getUserMedia` captures the desktop feed into a hidden HTML `<video>` element. 
-Instead of streaming heavy continuous video, the system uses an optimized event-driven diffing mechanism: a `<canvas>` draws the video frame every 4 seconds, downscales it to 64x36, and computes a pixel diff against the previous frame. If less than 3% of the screen has changed, it drops the frame entirely. If there is a change, it sends the full compressed JPEG as a `realtimeInput` image chunk. This dramatically reduces idle bandwidth and completely eliminates UI micro-stutters.
+WebRTC is utilized via `desktopCapturer.getSources()`. `navigator.mediaDevices.getUserMedia` captures the desktop feed into a hidden HTML `<video>` element. 
+Instead of streaming heavy continuous video, the system uses an optimized event-driven diffing mechanism: a `<canvas>` draws the video frame every 4 seconds, downscales it, and computes a pixel diff against the previous frame. If less than 3% of the screen has changed, it drops the frame entirely. If there is a change, it sends the full compressed JPEG as a `realtimeInput` image chunk. This dramatically reduces idle bandwidth.
+
+### Web Automation Engine (Playwright)
+Elyra utilizes a headless-capable browser sandbox driven by Playwright. When instructed to research or open a webpage, Elyra autonomously runs a DOM-tagging script (`browser_analyze_page`). This script scans the DOM for interactive elements and securely injects visual red boxes with numeric IDs over them. Elyra's vision system captures these tags, allowing her to issue pinpoint commands (e.g., `browser_click_element(12)`) to seamlessly orchestrate complex web workflows without relying on brittle CSS selectors.
 
 ## 4. Module/File Map
 - `electron/main.ts`: Main process entry; initializes transparent windows, handles IPC routing, and bootstraps memory. (Complete)
-- `electron/memory.ts`: SQLite wrapper managing `user_facts` and `sessions` tables; exposes CRUD operations for the memory engine. (Complete)
-- `electron/action_handler.ts`: Native wrapper executing OS commands via the C++ `elyra_automation.node` binary; includes execution delays for UI rendering. (Complete)
-- `electron/validator.ts`: Security layer that sanitizes and validates all AI-generated OS action requests before execution. (Complete)
-- `electron/preload.ts`: Electron ContextBridge exposing safe IPC methods (`desktopAction`, `getSystemContext`, etc.) to the React renderer. (Complete)
-- `src/App.tsx`: Root React component orchestrating the dynamic window sizing, layout, and Framer Motion transitions. (Complete)
-- `src/hooks/useLiveSession.ts`: Massive, monolithic hook managing the Gemini WebSocket lifecycle, WebRTC screen capture, audio streaming, and tool response execution. (Complete)
+- `electron/browser_service.ts`: Playwright orchestrator; manages browser contexts, tabs, and DOM-tagging injection for web automation. (Complete)
+- `electron/memory.ts`: SQLite wrapper managing `user_facts` and `sessions` tables. (Complete)
+- `electron/action_handler.ts`: Native wrapper executing robust PowerShell scripts and OS commands via the C++ `elyra_automation.node` binary. (Complete)
+- `electron/validator.ts`: Security layer that sanitizes all AI-generated OS action requests. (Complete)
+- `electron/preload.ts`: Electron ContextBridge exposing safe IPC methods to the React renderer. (Complete)
+- `src/App.tsx`: Root React component orchestrating dynamic window sizing and layout. (Complete)
+- `src/hooks/useLiveSession.ts`: Monolithic hook managing the Gemini WebSocket lifecycle, WebRTC screen capture, audio streaming, and browser/desktop tool response execution. (Complete)
 - `src/WaveWidget.tsx`: The primary visual interface featuring a floating, animated orb/waveform. (Complete)
-- `src/components/MemoryManager.tsx`: User-facing UI modal for viewing, editing, and manually adding long-term facts to the SQLite database. (Complete)
-- `build/Release/elyra_automation.node`: Compiled C++ Native Addon executing low-level Windows API commands. (Complete)
+- `src/components/MemoryManager.tsx`: User-facing UI modal for viewing and editing long-term facts. (Complete)
+- `build/Release/elyra_automation.node`: Compiled C++ Native Addon executing low-level Windows commands. (Complete)
 
 ## 5. Key Design Decisions & Tradeoffs
-- **Custom C++ Addon vs. Node OS Modules**: Standard Node libraries (like `robotjs` or `node-cmd`) are brittle or deprecated. Building a custom N-API C++ addon was chosen to ensure reliable, high-level control over Windows-specific APIs (e.g., `FindWindow`, `SendInput`).
-- **Sequential Tool Execution**: Multiple tool calls from the AI (e.g., open app, then type text) are forcefully batched and awaited sequentially in `useLiveSession.ts`. An explicit `turnComplete: true` is sent only after all tools finish, preventing the AI from interrupting itself or creating infinite execution loops.
-- **Polling Canvas vs. Video Stream**: Capturing a JPEG via canvas every 4 seconds was explicitly chosen over a raw video stream to manage bandwidth and prevent the Electron renderer from crashing under heavy load.
+- **Playwright over Native Clicks for Web**: Interacting with dynamic web pages using physical OS mouse clicks is highly error-prone. Building a dedicated Playwright orchestrator allows Elyra to perfectly map elements via JS injection and DOM tagging, making web execution 100% reliable.
+- **Copy-Paste over Raw Typing**: To avoid keystroke collisions during rapid OS/web interactions, Elyra is explicitly instructed to write text to the system clipboard and simulate `Ctrl+V` rather than typing character-by-character.
+- **Sequential Tool Execution**: Multiple tool calls from the AI are forcefully batched and awaited sequentially in `useLiveSession.ts` to prevent infinite execution loops and race conditions.
 
 ## 6. Current Status
-- **Fully Working**: Voice streaming, local SQLite memory ingestion via background worker, transparent frameless window rendering, dynamic window resizing (compact widget to expanded memory manager), seamless 9-minute session token swapping, mid-sentence recovery, and native OS automation (launching apps and typing).
-- **Partially Built**: Undocumented. All primary files appear to fulfill their intended architectural roles.
-- **Broken / Known-Buggy**: No `TODO`, `FIXME`, or `HACK` comments exist in the codebase. Recent bugs regarding tool execution loops and application focus injection have been explicitly patched out.
+- **Fully Working (Phase 1: Web Automation Focus)**: Real-time Voice/Vision streaming, dynamic DOM-tagging web automation via Playwright sandbox, robust PowerShell integrations, local SQLite memory ingestion, mid-sentence recovery, and transparent UI rendering.
+- **Partially Built**: Basic OS automation primitives (launching specific apps, simulated typing, window focusing) exist, but advanced native OS integration is scheduled for Phase 2.
 
-## 7. Roadmap / Not-Yet-Started
-- **Vector DB / ChromaDB Integration**: While "persistent memory" exists via SQLite, any advanced semantic/vector search (e.g., ChromaDB integration for Phase 2) is entirely absent from the codebase and remains NOT IMPLEMENTED.
+## 7. Roadmap / Next Steps
+- **Phase 2: Deep OS Automation**: Transitioning focus from the browser orchestrator to deep Windows OS integration (managing local files, native settings control, and complex desktop workflows).
+- **Advanced Background Tasks**: Enabling the system to send emails (SMTP/OAuth) and schedule calendar meetings silently via headless APIs.
+- **Vector DB / ChromaDB Integration**: Upgrading the local SQLite memory system to include advanced semantic/vector search for deeper contextual recall.
 
 ## 8. Known Constraints
-- **OS Lock-in**: The system is strictly bound to Windows. Code references `.exe` binaries and relies on a custom Windows C++ Addon for UI automation and CoreAudio device management.
-- **Hardware Profile**: Designed explicitly around the user's MSI Thin 15 (RTX 3050, 16GB RAM). While lightweight due to cloud offloading, screen capture and PCM encoding rely on standard client-side Web APIs.
-- **Gemini WebSocket Protocol**: The application architecture is highly constrained by the Google Gemini Bidi WebSocket schema; tool responses must be carefully orchestrated with `clientContent: { turnComplete: true }` frames to yield the floor back to the AI without breaking the session state.
+- **Gemini WebSocket Protocol**: The application architecture is highly constrained by the Google Gemini Bidi WebSocket schema; tool responses must be carefully orchestrated with `clientContent: { turnComplete: true }` frames.
+- **Hardware Profile**: Designed explicitly around the user's MSI Thin 15 (RTX 3050, 16GB RAM). While lightweight due to cloud offloading, screen capture relies on standard client-side Web APIs.
