@@ -10,12 +10,35 @@ function expandEnvVars(filepath: string | undefined): string | undefined {
   return filepath.replace(/%([^%]+)%/g, (_, n) => process.env[n] || '');
 }
 
-// Native require is used below
+import fs from 'node:fs';
+
+// Native require with fallback paths for production packaging
 let automation: any;
-try {
-  automation = require('../build/Release/elyra_automation.node');
-} catch (e) {
-  console.error("Failed to load native addon", e);
+const possibleAddonPaths = [
+  path.join(__dirname, '..', 'build', 'Release', 'elyra_automation.node'),
+  path.join((process as any).resourcesPath || '', 'build', 'Release', 'elyra_automation.node'),
+  path.join((process as any).resourcesPath || '', 'app.asar.unpacked', 'build', 'Release', 'elyra_automation.node'),
+  path.join(process.cwd(), 'build', 'Release', 'elyra_automation.node')
+];
+
+for (const p of possibleAddonPaths) {
+  try {
+    if (fs.existsSync(p)) {
+      automation = require(p);
+      console.log(`[ActionHandler] Successfully loaded native addon from: ${p}`);
+      break;
+    }
+  } catch (err) {
+    // Continue searching
+  }
+}
+
+if (!automation) {
+  try {
+    automation = require('../build/Release/elyra_automation.node');
+  } catch (e) {
+    console.error("[ActionHandler] Failed to load native addon from all paths", e);
+  }
 }
 
 // Global queue to prevent overlapping keystroke injection
@@ -111,7 +134,11 @@ export async function handleDesktopAction(actionName: string, args: any) {
 
     case 'set_default_audio_device': {
       try {
-        const nircmdPath = path.join(process.cwd(), 'bin', 'nircmdc.exe');
+        let nircmdPath = path.join(process.cwd(), 'bin', 'nircmdc.exe');
+        if (!fs.existsSync(nircmdPath) && (process as any).resourcesPath) {
+          const resPath = path.join((process as any).resourcesPath, 'bin', 'nircmdc.exe');
+          if (fs.existsSync(resPath)) nircmdPath = resPath;
+        }
         // nircmd expects the exact name or a substring
         await execAsync(`"${nircmdPath}" setdefaultsounddevice "${args.deviceName}" 0`); // 0 for Console
         await execAsync(`"${nircmdPath}" setdefaultsounddevice "${args.deviceName}" 1`); // 1 for Multimedia

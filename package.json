@@ -13,7 +13,8 @@
     "build:electron": "node-gyp rebuild --target=42.2.0 --arch=x64 --dist-url=https://electronjs.org/headers",
     "lint": "eslint .",
     "preview": "vite preview",
-    "dist:win": "npm run build && electron-builder --dir --x64"
+    "dist:win": "npm run build && electron-builder --win --x64",
+    "dist:dir": "npm run build && electron-builder --dir --x64"
   },
   "gypfile": true,
   "build": {
@@ -28,14 +29,36 @@
       "dist-electron/**/*",
       "build/Release/*.node"
     ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "build/Release",
+        "to": "build/Release",
+        "filter": ["*.node"]
+      }
+    ],
+    "asarUnpack": [
+      "build/Release/*.node",
+      "**/node_modules/better-sqlite3/**/*"
+    ],
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": "always",
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "shortcutName": "ELYRA"
     }
   },
   "dependencies": {
