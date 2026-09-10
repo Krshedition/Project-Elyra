@@ -42,7 +42,10 @@ CRITICAL INSTRUCTION: You are a desktop automation agent. You HAVE FULL CAPABILI
 'get_system_info' to proactively check RAM usage, Battery Life, and CPU hardware details.
   For 'file_system_action', you can 'create_dir', 'delete', 'move', 'copy', 'read', 'write', or 'overwrite'.
   CRITICAL: If a file system action requires confirmation (the tool response will tell you), you MUST verbally ask the user for confirmation (e.g., "I'm about to delete the file, confirm?"). Only call the tool again with confirmed=true AFTER the user says yes.
-  CRITICAL: If asked to read the clipboard and save it to a file, you MUST do this sequentially in two turns. Do NOT call 'read_clipboard' and 'file_system_action' simultaneously. First call 'read_clipboard', wait for the result, then call 'file_system_action' with the content you read. Always use ABSOLUTE paths (e.g., '%USERPROFILE%\\Desktop\\file.txt'). DO NOT GUESS THE USERNAME, ALWAYS USE %USERPROFILE% when referring to the user's home directory!`;
+  CRITICAL: If asked to read the clipboard and save it to a file, you MUST do this sequentially in two turns. Do NOT call 'read_clipboard' and 'file_system_action' simultaneously. First call 'read_clipboard', wait for the result, then call 'file_system_action' with the content you read. Always use ABSOLUTE paths (e.g., '%USERPROFILE%\\Desktop\\file.txt'). DO NOT GUESS THE USERNAME, ALWAYS USE %USERPROFILE% when referring to the user's home directory!
+  
+  one more important thing is to create triggers and analyse webpage with every step when you are working on web automation task`;
+
 
 
 export function useLiveSession() {
@@ -56,7 +59,7 @@ export function useLiveSession() {
   const transcriptRef = useRef<string>('');
   const resumptionTokenRef = useRef<string | null>(null);
   const isReconnectingRef = useRef<boolean>(false);
-  const recentToolCallsRef = useRef<Array<{name: string, args: string, time: number}>>([]);
+  const recentToolCallsRef = useRef<Array<{ name: string, args: string, time: number }>>([]);
   const pendingUserDraftRef = useRef<string>('');
   const sessionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [swapReady, setSwapReady] = useState<boolean>(false);
@@ -96,7 +99,7 @@ export function useLiveSession() {
       transcriptRef.current = '';
 
       let systemInstruction = BASE_SYSTEM_INSTRUCTION;
-      
+
       try {
         if ((window as any).ipcRenderer) {
           const facts = await (window as any).ipcRenderer.invoke('get-all-facts-detailed');
@@ -110,7 +113,7 @@ export function useLiveSession() {
       } catch (e) {
         console.error("Failed to load core memory facts for system instruction", e);
       }
-      
+
       systemInstruction += "\\n\\nYou also have a search_memory tool. Use it whenever you need to recall past conversation summaries.";
       // Check mic permission explicitly
       try {
@@ -121,7 +124,7 @@ export function useLiveSession() {
 
       const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
       const ws = new WebSocket(wsUrl);
-      
+
       const originalSend = ws.send;
       ws.send = (data) => {
         try {
@@ -131,10 +134,10 @@ export function useLiveSession() {
               (window as any).ipcRenderer?.log({ type: 'ws_send', data: parsed });
             }
           }
-        } catch (e) {}
+        } catch (e) { }
         originalSend.call(ws, data);
       };
-      
+
       wsRef.current = ws;
 
       streamerRef.current = new AudioStreamer();
@@ -143,18 +146,18 @@ export function useLiveSession() {
         if (isReconnectingRef.current) return;
         console.log('Initiating state-aware session swap for continuous conversation...');
         isReconnectingRef.current = true;
-        
+
         const finalTranscript = transcriptRef.current;
         if (finalTranscript) {
           runMemoryWorker(finalTranscript, apiKey);
           transcriptRef.current = '';
         }
-        
+
         if (wsRef.current) {
           wsRef.current.onclose = null;
           wsRef.current.close();
         }
-        
+
         setTimeout(() => connect(), 50); // Reconnect immediately
       };
       handleSwapRef.current = handleSwap;
@@ -167,207 +170,207 @@ export function useLiveSession() {
           },
           tools: [{
             functionDeclarations: [
-                {
-                  name: "search_memory",
-                  description: "Search the user's long-term memory database for personal facts, preferences, or past conversation summaries.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: { query: { type: "STRING" } },
-                    required: ["query"]
-                  }
-                },
-                {
-                  name: "browser_navigate",
-                  description: "Navigate the automation browser to a given URL. Use this ONLY to open websites, do not try to use any other tools.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: { url: { type: "STRING" } },
-                    required: ["url"]
-                  }
-                },
-                {
-                  name: "browser_click_text",
-                  description: "Click an element in the browser by its visible text.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: { text: { type: "STRING", description: "The exact visible text of the button or link to click" } },
-                    required: ["text"]
-                  }
-                },
-                {
-                  name: "browser_type_input",
-                  description: "Type text into a browser input field. Can optionally press Enter.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: { 
-                      selector: { type: "STRING", description: "Optional CSS selector for the input. If empty, types into the first visible input." },
-                      text: { type: "STRING", description: "Text to type" },
-                      pressEnter: { type: "BOOLEAN", description: "Whether to press Enter after typing" }
-                    },
-                    required: ["text", "pressEnter"]
-                  }
-                },
-                {
-                  name: "browser_click_video",
-                  description: "Specifically clicks the first YouTube video result on a YouTube search page or homepage.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: {}
-                  }
-                },
-                {
-                  name: "browser_scroll",
-                  description: "Scroll the automation browser page.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: { 
-                      direction: { 
-                        type: "STRING", 
-                        description: "The direction to scroll. MUST be one of: 'up', 'down', 'top', 'bottom'" 
-                      } 
-                    },
-                    required: ["direction"]
-                  }
-                },
-                {
-                  name: "browser_analyze_page",
-                  description: "Analyzes the current page, draws numbered tags over all interactive elements, and returns a map of their IDs. Use this only as a fallback if you cannot interact using text.",
-                  parameters: { type: "OBJECT", properties: {} }
-                },
-                {
-                  name: "browser_click_element",
-                  description: "Click an element using its numeric ID obtained from browser_analyze_page.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: { id: { type: "INTEGER" } },
-                    required: ["id"]
-                  }
-                },
-                {
-                  name: "browser_fill_form",
-                  description: "Fill multiple input fields simultaneously using their numeric IDs obtained from browser_analyze_page.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: { 
-                      fields: { 
-                        type: "ARRAY", 
-                        items: { 
-                          type: "OBJECT", 
-                          properties: { id: { type: "INTEGER" }, text: { type: "STRING" } } 
-                        } 
-                      } 
-                    },
-                    required: ["fields"]
-                  }
-                },
-                {
-                  name: "browser_close_tab",
-                  description: "Closes the current automation browser tab.",
-                  parameters: { type: "OBJECT", properties: {} }
-                },
-                {
-                  name: "browser_press_key",
-                  description: "Press a specific keyboard key inside the automation browser (e.g., 'Enter', 'Escape', 'Tab', 'ArrowDown'). Useful for submitting forms.",
-                  parameters: {
-                    type: "OBJECT",
-                    properties: { key: { type: "STRING" } },
-                    required: ["key"]
-                  }
-                },
-                {
-                  name: "desktopAction",
-                    description: "Executes a safe, validated desktop automation action.",
-                    parameters: {
-                      type: "OBJECT",
-                      properties: {
-                        actionName: { 
-                          type: "STRING", 
-                          description: "The name of the action to perform. MUST be one of: 'open_app', 'close_app', 'type_text', 'press_key', 'system_action', 'get_running_processes', 'kill_process', 'get_focused_window', 'get_system_info', 'set_volume', 'set_brightness', 'toggle_wifi', 'toggle_bluetooth', 'set_display_resolution', 'set_default_audio_device', 'get_audio_devices', 'file_system_action', 'read_clipboard', 'write_clipboard'"
-                        },
-                        appName: { 
-                          type: "STRING",
-                          description: "Required if actionName is 'open_app', 'close_app', or 'type_text'. The name of the application to search for and act upon."
-                        },
-                        text: {
-                          type: "STRING",
-                          description: "Required for 'type_text' or 'write_clipboard'. The text to type or copy."
-                        },
-                        key: {
-                          type: "STRING",
-                          description: "Required if actionName is 'press_key'."
-                        },
-                        action: {
-                          type: "STRING",
-                          description: "Required for 'system_action' or 'file_system_action'."
-                        },
-                        processName: {
-                          type: "STRING",
-                          description: "Required if actionName is 'kill_process'. The exact executable name (e.g., 'chrome.exe', 'notepad.exe'). Use 'get_running_processes' first to find the exact name."
-                        },
-                        level: {
-                          type: "NUMBER",
-                          description: "Required if actionName is 'set_volume' or 'set_brightness'. An integer between 0 and 100."
-                        },
-                        enable: {
-                          type: "BOOLEAN",
-                          description: "Required if actionName is 'toggle_wifi' or 'toggle_bluetooth'. true to turn on, false to turn off."
-                        },
-                        width: {
-                          type: "NUMBER",
-                          description: "Required if actionName is 'set_display_resolution'. The horizontal resolution."
-                        },
-                        height: {
-                          type: "NUMBER",
-                          description: "Required if actionName is 'set_display_resolution'. The vertical resolution."
-                        },
-                        deviceName: {
-                          type: "STRING",
-                          description: "Required if actionName is 'set_default_audio_device'. A substring of the desired audio device name. Use 'get_audio_devices' first to list available names."
-                        },
-                        path: {
-                          type: "STRING",
-                          description: "ABSOLUTE file or directory path for file_system_action (except move/copy). NEVER use relative paths."
-                        },
-                        src: {
-                          type: "STRING",
-                          description: "ABSOLUTE source path for move or copy. NEVER use relative paths."
-                        },
-                        dest: {
-                          type: "STRING",
-                          description: "ABSOLUTE destination path for move or copy. NEVER use relative paths."
-                        },
-                        content: {
-                          type: "STRING",
-                          description: "Content to write for file_system_action write/overwrite."
-                        },
-                        confirmed: {
-                          type: "BOOLEAN",
-                          description: "Set to true ONLY if the user explicitly confirmed a destructive action (delete/overwrite) AFTER being prompted."
-                        }
-                      },
-                      required: ["actionName"]
+              {
+                name: "search_memory",
+                description: "Search the user's long-term memory database for personal facts, preferences, or past conversation summaries.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: { query: { type: "STRING" } },
+                  required: ["query"]
+                }
+              },
+              {
+                name: "browser_navigate",
+                description: "Navigate the automation browser to a given URL. Use this ONLY to open websites, do not try to use any other tools.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: { url: { type: "STRING" } },
+                  required: ["url"]
+                }
+              },
+              {
+                name: "browser_click_text",
+                description: "Click an element in the browser by its visible text.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: { text: { type: "STRING", description: "The exact visible text of the button or link to click" } },
+                  required: ["text"]
+                }
+              },
+              {
+                name: "browser_type_input",
+                description: "Type text into a browser input field. Can optionally press Enter.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    selector: { type: "STRING", description: "Optional CSS selector for the input. If empty, types into the first visible input." },
+                    text: { type: "STRING", description: "Text to type" },
+                    pressEnter: { type: "BOOLEAN", description: "Whether to press Enter after typing" }
+                  },
+                  required: ["text", "pressEnter"]
+                }
+              },
+              {
+                name: "browser_click_video",
+                description: "Specifically clicks the first YouTube video result on a YouTube search page or homepage.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {}
+                }
+              },
+              {
+                name: "browser_scroll",
+                description: "Scroll the automation browser page.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    direction: {
+                      type: "STRING",
+                      description: "The direction to scroll. MUST be one of: 'up', 'down', 'top', 'bottom'"
                     }
-                  }
-              ]
-            }],
-            generationConfig: {
-              responseModalities: ["AUDIO"],
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: {
-                    voiceName: "Aoede"
-                  }
+                  },
+                  required: ["direction"]
+                }
+              },
+              {
+                name: "browser_analyze_page",
+                description: "Analyzes the current page, draws numbered tags over all interactive elements, and returns a map of their IDs. Use this only as a fallback if you cannot interact using text.",
+                parameters: { type: "OBJECT", properties: {} }
+              },
+              {
+                name: "browser_click_element",
+                description: "Click an element using its numeric ID obtained from browser_analyze_page.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: { id: { type: "INTEGER" } },
+                  required: ["id"]
+                }
+              },
+              {
+                name: "browser_fill_form",
+                description: "Fill multiple input fields simultaneously using their numeric IDs obtained from browser_analyze_page.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    fields: {
+                      type: "ARRAY",
+                      items: {
+                        type: "OBJECT",
+                        properties: { id: { type: "INTEGER" }, text: { type: "STRING" } }
+                      }
+                    }
+                  },
+                  required: ["fields"]
+                }
+              },
+              {
+                name: "browser_close_tab",
+                description: "Closes the current automation browser tab.",
+                parameters: { type: "OBJECT", properties: {} }
+              },
+              {
+                name: "browser_press_key",
+                description: "Press a specific keyboard key inside the automation browser (e.g., 'Enter', 'Escape', 'Tab', 'ArrowDown'). Useful for submitting forms.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: { key: { type: "STRING" } },
+                  required: ["key"]
+                }
+              },
+              {
+                name: "desktopAction",
+                description: "Executes a safe, validated desktop automation action.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    actionName: {
+                      type: "STRING",
+                      description: "The name of the action to perform. MUST be one of: 'open_app', 'close_app', 'type_text', 'press_key', 'system_action', 'get_running_processes', 'kill_process', 'get_focused_window', 'get_system_info', 'set_volume', 'set_brightness', 'toggle_wifi', 'toggle_bluetooth', 'set_display_resolution', 'set_default_audio_device', 'get_audio_devices', 'file_system_action', 'read_clipboard', 'write_clipboard'"
+                    },
+                    appName: {
+                      type: "STRING",
+                      description: "Required if actionName is 'open_app', 'close_app', or 'type_text'. The name of the application to search for and act upon."
+                    },
+                    text: {
+                      type: "STRING",
+                      description: "Required for 'type_text' or 'write_clipboard'. The text to type or copy."
+                    },
+                    key: {
+                      type: "STRING",
+                      description: "Required if actionName is 'press_key'."
+                    },
+                    action: {
+                      type: "STRING",
+                      description: "Required for 'system_action' or 'file_system_action'."
+                    },
+                    processName: {
+                      type: "STRING",
+                      description: "Required if actionName is 'kill_process'. The exact executable name (e.g., 'chrome.exe', 'notepad.exe'). Use 'get_running_processes' first to find the exact name."
+                    },
+                    level: {
+                      type: "NUMBER",
+                      description: "Required if actionName is 'set_volume' or 'set_brightness'. An integer between 0 and 100."
+                    },
+                    enable: {
+                      type: "BOOLEAN",
+                      description: "Required if actionName is 'toggle_wifi' or 'toggle_bluetooth'. true to turn on, false to turn off."
+                    },
+                    width: {
+                      type: "NUMBER",
+                      description: "Required if actionName is 'set_display_resolution'. The horizontal resolution."
+                    },
+                    height: {
+                      type: "NUMBER",
+                      description: "Required if actionName is 'set_display_resolution'. The vertical resolution."
+                    },
+                    deviceName: {
+                      type: "STRING",
+                      description: "Required if actionName is 'set_default_audio_device'. A substring of the desired audio device name. Use 'get_audio_devices' first to list available names."
+                    },
+                    path: {
+                      type: "STRING",
+                      description: "ABSOLUTE file or directory path for file_system_action (except move/copy). NEVER use relative paths."
+                    },
+                    src: {
+                      type: "STRING",
+                      description: "ABSOLUTE source path for move or copy. NEVER use relative paths."
+                    },
+                    dest: {
+                      type: "STRING",
+                      description: "ABSOLUTE destination path for move or copy. NEVER use relative paths."
+                    },
+                    content: {
+                      type: "STRING",
+                      description: "Content to write for file_system_action write/overwrite."
+                    },
+                    confirmed: {
+                      type: "BOOLEAN",
+                      description: "Set to true ONLY if the user explicitly confirmed a destructive action (delete/overwrite) AFTER being prompted."
+                    }
+                  },
+                  required: ["actionName"]
+                }
+              }
+            ]
+          }],
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: "Aoede"
                 }
               }
             }
-          };
-
-          if (resumptionTokenRef.current) {
-            setupPayload.sessionResumption = { handle: resumptionTokenRef.current };
           }
+        };
 
-          ws.send(JSON.stringify({ setup: setupPayload }));
-          // We do NOT set state to listening yet. We wait for setupComplete.
+        if (resumptionTokenRef.current) {
+          setupPayload.sessionResumption = { handle: resumptionTokenRef.current };
+        }
+
+        ws.send(JSON.stringify({ setup: setupPayload }));
+        // We do NOT set state to listening yet. We wait for setupComplete.
       };
 
       ws.onmessage = async (event) => {
@@ -381,7 +384,7 @@ export function useLiveSession() {
 
           if (data.setupComplete) {
             setState('listening');
-            
+
             // Start 8.5-minute swap timeout for state-aware swap
             if (sessionTimeoutRef.current) clearTimeout(sessionTimeoutRef.current);
             sessionTimeoutRef.current = setTimeout(() => {
@@ -404,7 +407,7 @@ export function useLiveSession() {
               }
               // Removed synthetic [SYSTEM...] injection since State-Aware swap prevents mid-sentence breaks!
             }
-            
+
             // Reset reconnection flag
             isReconnectingRef.current = false;
 
@@ -466,18 +469,18 @@ export function useLiveSession() {
 
                 videoIntervalRef.current = setInterval(() => {
                   if (!ctx || !diffCtx || ws.readyState !== WebSocket.OPEN) return;
-                  
+
                   // Compute a lightweight diff on a tiny downscaled frame
                   diffCtx.drawImage(video, 0, 0, 64, 36);
                   const currentData = diffCtx.getImageData(0, 0, 64, 36).data;
-                  
+
                   let isDifferent = false;
                   if (prevData) {
                     let diffCount = 0;
                     for (let i = 0; i < currentData.length; i += 4) {
                       const rDiff = Math.abs(currentData[i] - prevData[i]);
-                      const gDiff = Math.abs(currentData[i+1] - prevData[i+1]);
-                      const bDiff = Math.abs(currentData[i+2] - prevData[i+2]);
+                      const gDiff = Math.abs(currentData[i + 1] - prevData[i + 1]);
+                      const bDiff = Math.abs(currentData[i + 2] - prevData[i + 2]);
                       if (rDiff > 10 || gDiff > 10 || bDiff > 10) {
                         diffCount++;
                       }
@@ -494,7 +497,7 @@ export function useLiveSession() {
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
                     const base64 = dataUrl.split(',')[1];
-                    
+
                     ws.send(JSON.stringify({
                       realtimeInput: {
                         video: {
@@ -511,7 +514,7 @@ export function useLiveSession() {
             };
             startScreenCapture();
           }
-          
+
           if (data.serverContent?.modelTurn) {
             pendingUserDraftRef.current = ''; // Clear user draft once AI starts responding
             const parts = data.serverContent.modelTurn.parts;
@@ -529,20 +532,20 @@ export function useLiveSession() {
           }
 
           if (data.serverContent?.inputTranscription) {
-             const userText = data.serverContent.inputTranscription.text;
-             if (userText) {
-                transcriptRef.current += `\\nKrish: ${userText}`;
-                pendingUserDraftRef.current = userText;
-             }
+            const userText = data.serverContent.inputTranscription.text;
+            if (userText) {
+              transcriptRef.current += `\\nKrish: ${userText}`;
+              pendingUserDraftRef.current = userText;
+            }
           }
 
           if (data.serverContent?.outputTranscription) {
-             const aiText = data.serverContent.outputTranscription.text;
-             if (aiText) {
-                transcriptRef.current += `\\nElyra: ${aiText}`;
-             }
+            const aiText = data.serverContent.outputTranscription.text;
+            if (aiText) {
+              transcriptRef.current += `\\nElyra: ${aiText}`;
+            }
           }
-          
+
           if (data.sessionResumptionUpdate?.newHandle) {
             resumptionTokenRef.current = data.sessionResumptionUpdate.newHandle;
           }
@@ -551,37 +554,37 @@ export function useLiveSession() {
             console.log('Server issued GoAway frame, swapping...');
             handleSwap();
           }
-          
+
           if (data.toolCall?.functionCalls) {
             const runAllTools = async () => {
               const responses = [];
               const now = Date.now();
-              
+
               for (const call of data.toolCall.functionCalls) {
                 const argsStr = JSON.stringify(call.args || {});
-                
+
                 // Prevent duplicate tool execution caused by slow-network retry loops (2-second window)
                 const isDuplicate = recentToolCallsRef.current.some(
                   t => t.name === call.name && t.args === argsStr && (now - t.time) < 2000
                 );
-                
+
                 if (isDuplicate) {
                   console.log('Skipping duplicate tool call due to slow network retry loop:', call.name);
-                  responses.push({ 
-                    id: call.id || "1", 
-                    name: call.name, 
-                    response: { result: "Action already executed recently." } 
+                  responses.push({
+                    id: call.id || "1",
+                    name: call.name,
+                    response: { result: "Action already executed recently." }
                   });
                   continue;
                 }
-                
+
                 recentToolCallsRef.current.push({ name: call.name, args: argsStr, time: now });
                 // Keep history clean (only last 10 seconds)
                 recentToolCallsRef.current = recentToolCallsRef.current.filter(t => (now - t.time) < 10000);
 
                 responses.push(await executeFunctionCall(call));
               }
-              
+
               if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                   toolResponse: {
@@ -595,7 +598,7 @@ export function useLiveSession() {
             };
             runAllTools();
           }
-          
+
           if (data.serverContent?.turnComplete) {
             // State transition is handled cleanly by the animation frame once playback truly finishes!
           }
@@ -603,7 +606,7 @@ export function useLiveSession() {
           if (data.serverContent?.interrupted) {
             streamerRef.current?.interrupt();
           }
-          
+
           if (data.error) {
             (window as any).ipcRenderer?.log({ type: 'ws_error', error: data.error });
             setErrorMsg(data.error.message || 'Gemini API Error');
@@ -618,8 +621,8 @@ export function useLiveSession() {
       ws.onclose = (event) => {
         (window as any).ipcRenderer?.log({ type: 'ws_close', code: event.code, reason: event.reason });
         if (state !== 'idle' && state !== 'error') {
-           setErrorMsg(`Connection closed (${event.code})`);
-           setState('error');
+          setErrorMsg(`Connection closed (${event.code})`);
+          setState('error');
         }
         resumptionTokenRef.current = null; // Clear stale token on unexpected disconnect
         cleanup();
@@ -642,7 +645,7 @@ export function useLiveSession() {
 
   const executeFunctionCall = async (functionCall: any) => {
     const { id, name, args } = functionCall;
-    
+
     if (name === 'browser_navigate') {
       console.log('Navigating browser:', args.url);
       if ((window as any).ipcRenderer?.browserNavigate) {
@@ -725,32 +728,32 @@ export function useLiveSession() {
         // Construct the nested args object that validator.ts expects
         const actionArgs: any = {};
         if (args.appName) actionArgs.appName = args.appName;
-          if (args.text) actionArgs.text = args.text;
-          if (args.key) actionArgs.key = args.key;
-          if (args.action) actionArgs.action = args.action;
-          if (args.processName) actionArgs.processName = args.processName;
-          if (args.level !== undefined) actionArgs.level = args.level;
-          if (args.enable !== undefined) actionArgs.enable = args.enable;
-          if (args.width !== undefined) actionArgs.width = args.width;
-          if (args.height !== undefined) actionArgs.height = args.height;
-          if (args.deviceName) actionArgs.deviceName = args.deviceName;
-          if (args.path) actionArgs.path = args.path;
-          if (args.src) actionArgs.src = args.src;
-          if (args.dest) actionArgs.dest = args.dest;
-          if (args.content) actionArgs.content = args.content;
-          if (args.confirmed !== undefined) actionArgs.confirmed = args.confirmed;
-  
-          console.log('Executing desktop action:', args.actionName, actionArgs);
-          if ((window as any).ipcRenderer?.desktopAction) {
-            const res = await (window as any).ipcRenderer.desktopAction(args.actionName, actionArgs);
-            if (res && res.requiresConfirmation) {
-              return { id: id || "1", name, response: { result: res.message, requiresConfirmation: true } };
-            } else {
-              return { id: id || "1", name, response: { result: typeof res === 'string' ? res : JSON.stringify(res) } };
-            }
+        if (args.text) actionArgs.text = args.text;
+        if (args.key) actionArgs.key = args.key;
+        if (args.action) actionArgs.action = args.action;
+        if (args.processName) actionArgs.processName = args.processName;
+        if (args.level !== undefined) actionArgs.level = args.level;
+        if (args.enable !== undefined) actionArgs.enable = args.enable;
+        if (args.width !== undefined) actionArgs.width = args.width;
+        if (args.height !== undefined) actionArgs.height = args.height;
+        if (args.deviceName) actionArgs.deviceName = args.deviceName;
+        if (args.path) actionArgs.path = args.path;
+        if (args.src) actionArgs.src = args.src;
+        if (args.dest) actionArgs.dest = args.dest;
+        if (args.content) actionArgs.content = args.content;
+        if (args.confirmed !== undefined) actionArgs.confirmed = args.confirmed;
+
+        console.log('Executing desktop action:', args.actionName, actionArgs);
+        if ((window as any).ipcRenderer?.desktopAction) {
+          const res = await (window as any).ipcRenderer.desktopAction(args.actionName, actionArgs);
+          if (res && res.requiresConfirmation) {
+            return { id: id || "1", name, response: { result: res.message, requiresConfirmation: true } };
           } else {
-            return { id: id || "1", name, response: { error: "Electron IPC not available" } };
+            return { id: id || "1", name, response: { result: typeof res === 'string' ? res : JSON.stringify(res) } };
           }
+        } else {
+          return { id: id || "1", name, response: { error: "Electron IPC not available" } };
+        }
       } catch (err: any) {
         return { id: id || "1", name, response: { error: err.message || "Action failed" } };
       }
