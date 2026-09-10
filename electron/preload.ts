@@ -53,6 +53,12 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   updateFactManual(payload: any) {
     return ipcRenderer.invoke('update-fact-manual', payload)
   },
+  getUserConfig() {
+    return ipcRenderer.invoke('get-user-config')
+  },
+  saveUserConfig(config: any) {
+    return ipcRenderer.invoke('save-user-config', config)
+  },
   setWindowMode(mode: 'compact' | 'expanded') {
     return ipcRenderer.send('set-window-mode', mode)
   },

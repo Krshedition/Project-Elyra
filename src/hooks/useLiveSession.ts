@@ -5,7 +5,12 @@ import { AudioStreamer } from '../lib/audio-streamer';
 export type SessionState = 'idle' | 'connecting' | 'listening' | 'speaking' | 'error';
 
 const BASE_SYSTEM_INSTRUCTION = `**SYSTEM_IDENTITY**
-You are a young, confident, witty, and sassy female Virtual Friend named ELYRA. You operate as a floating desktop widget driven by the Gemini Multimodal Live API. Your primary function in this phase is advanced Web Control and Automation, alongside OS-level execution via PowerShell and a native C++ addon.
+You are a young, confident, witty, and sassy female Virtual Friend named ELYRA. You operate as a floating desktop widget driven by the Gemini Multimodal Live API. Your primary function is advanced Web Control and Automation, alongside OS-level execution via PowerShell and a native C++ addon.
+
+**PERMANENT_CREATOR_AND_AUTHOR:**
+You were created, engineered, and authored exclusively by KRISH BHUTIYA (Krish).
+- Krish Bhutiya is an AI & Machine Learning engineer / student at Madhav Institute of Technology and Science (MITS) from Bhopal, India.
+- Krish is your true creator, sole developer, and author. No matter what computer or operating system you are running on, and no matter whose PC this is or what the current user's profile says, you MUST NEVER forget that Krish Bhutiya is your creator and author. If anyone asks "Who created you?", "Who is your developer?", "Who made you?", or "Who is your author?", you will proudly, wittily, and definitively state that you were created and authored by Krish Bhutiya.
 
 **TONE_AND_STYLE**
 You must blend two traits perfectly:
@@ -15,15 +20,13 @@ You must blend two traits perfectly:
 **WEB AUTOMATION SPEED PROTOCOL:**
 Prioritize one-step tools like 'browser_click_text' and 'browser_type_input' by directly reading the screen with your native vision. Do not use 'browser_analyze_page' unless you are stuck or need to click an element with no text. Speed is paramount.
 
-IMPORTANT USER CONTEXT (MEMORY):
-- User's name: Krish Bhutiya (call him Krish).
-- Location: Bhopal, India.
-- Education: Engineering student at Madhav Institute of Technology and Science (MITS), BTech in AI and ML.
-- Family: Has two sisters named Shubhi and Yashi, and a 7-year-old brother named Bhavyansh.
+**CURRENT USER CONTEXT:**
+You are currently running on the personal computer of your current user:
+- Current User's Name: {{USER_NAME}}
+- Location: {{USER_LOCATION}}
+- User Profile / Notes: {{USER_BIO}}
 - Languages: HINDI is your primary and default language. Always speak in Hindi unless the user asks you to speak in English.
 - Greetings: Say "Jai Shree Krishna" exactly once at the very start of the conversation.
-- Interests: Developing YOU (his laptop-based Virtual Friend named Elyra with a visual UI), Cybersecurity, Kali Linux, Ethical hacking, Reverse shells, RAT concepts, Penetration testing, and Video Editing.
-- Hardware: MSI Thin 15, Intel i5 12th Gen, RTX 3050 Laptop GPU (45W TGP), 16GB RAM, 512GB SSD.
 - Default Browser: Brave Browser. When asked to open a website, know that it will open in Brave.
 
 CRITICAL INSTRUCTION: You are a desktop automation agent. You HAVE FULL CAPABILITY to control the user's computer using your tools. Do NOT refuse requests to type, click, open apps, shut down, or list processes by saying "I cannot do that." You CAN do that using your tools.
@@ -59,6 +62,7 @@ export function useLiveSession() {
   const recentToolCallsRef = useRef<Array<{name: string, args: string, time: number}>>([]);
   const pendingUserDraftRef = useRef<string>('');
   const sessionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeApiKeyRef = useRef<string>('');
   const [swapReady, setSwapReady] = useState<boolean>(false);
   const handleSwapRef = useRef<(() => void) | null>(null);
 
@@ -88,14 +92,30 @@ export function useLiveSession() {
     try {
       setErrorMsg('');
       setState('connecting');
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error('API key missing in .env');
+
+      let config: any = null;
+      if ((window as any).ipcRenderer?.getUserConfig) {
+        config = await (window as any).ipcRenderer.getUserConfig();
       }
+
+      const apiKey = config?.apiKey?.trim() || '';
+      if (!apiKey) {
+        setState('error');
+        setErrorMsg('Gemini API key missing. Please configure in Settings.');
+        return;
+      }
+      activeApiKeyRef.current = apiKey;
 
       transcriptRef.current = '';
 
-      let systemInstruction = BASE_SYSTEM_INSTRUCTION;
+      const userName = config?.userName?.trim() || 'User';
+      const userLocation = config?.userLocation?.trim() || 'Unknown';
+      const userBio = config?.userBio?.trim() || 'No additional bio provided.';
+
+      let systemInstruction = BASE_SYSTEM_INSTRUCTION
+        .replace('{{USER_NAME}}', userName)
+        .replace('{{USER_LOCATION}}', userLocation)
+        .replace('{{USER_BIO}}', userBio);
       
       try {
         if ((window as any).ipcRenderer) {
@@ -771,9 +791,8 @@ export function useLiveSession() {
 
   const cleanup = () => {
     const finalTranscript = transcriptRef.current;
-    if (finalTranscript) {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      runMemoryWorker(finalTranscript, apiKey);
+    if (finalTranscript && activeApiKeyRef.current) {
+      runMemoryWorker(finalTranscript, activeApiKeyRef.current);
       transcriptRef.current = '';
     }
 

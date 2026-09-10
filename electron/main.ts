@@ -1,6 +1,64 @@
 import { app, BrowserWindow, ipcMain, screen, session, shell, desktopCapturer } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { initMemory, getRecentContext, saveSessionSummary, saveFact, getAllFactsDetailed, deleteFact, updateFact } from './memory';
+
+app.name = 'ELYRA';
+const userDataPath = path.join(app.getPath('appData'), 'ELYRA');
+app.setPath('userData', userDataPath);
+
+export interface UserConfig {
+  apiKey: string;
+  userName: string;
+  userLocation: string;
+  userBio: string;
+}
+
+export function getUserConfig(): UserConfig {
+  const configPath = path.join(app.getPath('userData'), 'user_config.json');
+  if (fs.existsSync(configPath)) {
+    try {
+      const content = fs.readFileSync(configPath, 'utf8');
+      const parsed = JSON.parse(content);
+      return {
+        apiKey: parsed.apiKey || '',
+        userName: parsed.userName || '',
+        userLocation: parsed.userLocation || '',
+        userBio: parsed.userBio || ''
+      };
+    } catch (err) {
+      console.error('Failed to parse user_config.json:', err);
+    }
+  }
+
+  if (!app.isPackaged) {
+    return {
+      apiKey: process.env.VITE_GEMINI_API_KEY || '',
+      userName: 'Krish Bhutiya',
+      userLocation: 'Bhopal, India',
+      userBio: 'Engineering student at MITS (BTech in AI & ML). Author & developer of Elyra.'
+    };
+  }
+
+  return { apiKey: '', userName: '', userLocation: '', userBio: '' };
+}
+
+export function saveUserConfig(newConfig: Partial<UserConfig>): boolean {
+  try {
+    const configPath = path.join(app.getPath('userData'), 'user_config.json');
+    const dir = path.dirname(configPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const current = getUserConfig();
+    const merged = { ...current, ...newConfig };
+    fs.writeFileSync(configPath, JSON.stringify(merged, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error('Failed to save user_config.json:', err);
+    return false;
+  }
+}
 
 process.env.APP_ROOT = path.join(__dirname, '..');
 
@@ -213,6 +271,14 @@ ipcMain.handle('save-session-digest', async (event, payload) => {
     }
   }
   return true;
+});
+
+ipcMain.handle('get-user-config', async () => {
+  return getUserConfig();
+});
+
+ipcMain.handle('save-user-config', async (event, config: Partial<UserConfig>) => {
+  return saveUserConfig(config);
 });
 
 

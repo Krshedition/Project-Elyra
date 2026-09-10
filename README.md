@@ -10,12 +10,12 @@
 - [3. Technology Stack Breakdown (What Was Used for What)](#3-technology-stack-breakdown-what-was-used-for-what)
 - [4. Complete Codebase Anatomy & File Map](#4-complete-codebase-anatomy--file-map)
 - [5. Deep-Dive Subsystem Analysis](#5-deep-dive-subsystem-analysis)
-  - [5.1 Multimodal Live Voice & Vision Streaming](#51-multimodal-live-voice--vision-streaming)
-  - [5.2 Playwright Web Automation & Visual DOM Tagging](#52-playwright-web-automation--visual-dom-tagging)
-  - [5.3 Native Windows C++ Engine (`elyra_automation.node`)](#53-native-windows-c-engine-elyra_automationnode)
-  - [5.4 Persistent SQLite Core Memory & Autonomous Worker](#54-persistent-sqlite-core-memory--autonomous-worker)
-  - [5.5 Transparent Glassmorphic UI & Animation Pipeline](#55-transparent-glassmorphic-ui--animation-pipeline)
-  - [5.6 Security, Validation & Confirmation Protocols](#56-security-validation--confirmation-protocols)
+- [5.1 Multimodal Live Voice & Vision Streaming](#51-multimodal-live-voice--vision-streaming)
+- [5.2 Playwright Web Automation & Visual DOM Tagging](#52-playwright-web-automation--visual-dom-tagging)
+- [5.3 Native Windows C++ Engine (`elyra_automation.node`)](#53-native-windows-c-engine-elyra_automationnode)
+- [5.4 Persistent SQLite Core Memory & Autonomous Worker](#54-persistent-sqlite-core-memory--autonomous-worker)
+- [5.5 Transparent Glassmorphic UI & Animation Pipeline](#55-transparent-glassmorphic-ui--animation-pipeline)
+- [5.6 Security, Validation & Confirmation Protocols](#56-security-validation--confirmation-protocols)
 - [6. Current Progress & Implementation Status](#6-current-progress--implementation-status)
 - [7. Setup, Build & Running Guide](#7-setup-build--running-guide)
 - [8. Roadmap & Phase 2 Evolution](#8-roadmap--phase-2-evolution)
@@ -293,11 +293,17 @@ Phase 2: Vector DB / ChromaDB Semantic Memory  UPCOMING         0%
    ```
    This launches the Vite dev server and opens the frameless Electron desktop widget.
 
-5. **Build Standalone Executable**:
+5. **Build Standalone Windows Setup Installer**:
    ```bash
    npm run dist:win
    ```
-   Outputs an NSIS Windows installer in the `dist-app/` directory.
+   Outputs an interactive NSIS Windows installer in `dist-app/` (`ELYRA Setup 1.0.0.exe`).
+   - **Step 1 (API Key):** Prompts the installing user for their Google Gemini API Key.
+   - **Step 2 (User Profile):** Prompts for the user's name, location, and bio/interests.
+   - **Secure Storage:** Saved locally to `%APPDATA%\ELYRA\user_config.json`.
+   - **Zero Bundled Secrets:** No developer API keys or private personal details are bundled in the package.
+   - **Author Identity:** Elyra permanently recognizes **Krish Bhutiya** as her sole author and developer across all systems and installations, while addressing the local machine owner as the current user.
+   - **In-App Preferences:** Users can view and update their API Key, Name, Location, and Bio at any time by clicking the Settings gear on the desktop widget.
 
 ---
 
