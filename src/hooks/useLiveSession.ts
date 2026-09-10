@@ -46,9 +46,10 @@ CRITICAL INSTRUCTION: You are a desktop automation agent. You HAVE FULL CAPABILI
 'get_system_info' to proactively check RAM usage, Battery Life, and CPU hardware details.
   For 'file_system_action', you can 'create_dir', 'delete', 'move', 'copy', 'read', 'write', or 'overwrite'.
   CRITICAL: If a file system action requires confirmation (the tool response will tell you), you MUST verbally ask the user for confirmation (e.g., "I'm about to delete the file, confirm?"). Only call the tool again with confirmed=true AFTER the user says yes.
-  CRITICAL: If asked to read the clipboard and save it to a file, you MUST do this sequentially in two turns. Do NOT call 'read_clipboard' and 'file_system_action' simultaneously. First call 'read_clipboard', wait for the result, then call 'file_system_action' with the content you read. Always use ABSOLUTE paths (e.g., '%USERPROFILE%\\Desktop\\file.txt'). DO NOT GUESS THE USERNAME, ALWAYS USE %USERPROFILE% when referring to the user's home directory!
-  
-  one more important thing is to create triggers and analyse webpage with every step when you are working on web automation task`;
+CRITICAL AUTONOMOUS ACTION RESTRICTIONS:
+- Execute tools ONLY in DIRECT response to an explicit voice command from Krish.
+- Video frames of the screen are strictly for passive visual reference when the user asks questions. NEVER execute tools, open tabs, or navigate websites spontaneously in response to video frames without a new voice command.
+- Once you perform the requested action (e.g., opening WhatsApp or ChatGPT), STOP IMMEDIATELY. Speak a short confirmation and WAIT for Krish's next voice command. NEVER enter an autonomous re-trigger or navigation loop.`;
 
 
 
@@ -65,6 +66,8 @@ export function useLiveSession() {
   const isReconnectingRef = useRef<boolean>(false);
   const recentToolCallsRef = useRef<Array<{ name: string, args: string, time: number }>>([]);
   const pendingUserDraftRef = useRef<string>('');
+  const toolsSinceLastUserSpeechRef = useRef<number>(0);
+  const lastToolExecutionTimeRef = useRef<number>(0);
   const sessionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [swapReady, setSwapReady] = useState<boolean>(false);
   const handleSwapRef = useRef<(() => void) | null>(null);
@@ -511,6 +514,9 @@ export function useLiveSession() {
                 videoIntervalRef.current = setInterval(() => {
                   if (!ctx || !diffCtx || ws.readyState !== WebSocket.OPEN) return;
 
+                  // Pause video frame transmission for 6 seconds after tool execution to avoid feedback loops with page loading
+                  if (Date.now() - lastToolExecutionTimeRef.current < 6000) return;
+
                   // Compute a lightweight diff on a tiny downscaled frame
                   diffCtx.drawImage(video, 0, 0, 64, 36);
                   const currentData = diffCtx.getImageData(0, 0, 64, 36).data;
@@ -575,15 +581,16 @@ export function useLiveSession() {
           if (data.serverContent?.inputTranscription) {
             const userText = data.serverContent.inputTranscription.text;
             if (userText) {
-              transcriptRef.current += `\\nKrish: ${userText}`;
+              transcriptRef.current += `\nKrish: ${userText}`;
               pendingUserDraftRef.current = userText;
+              toolsSinceLastUserSpeechRef.current = 0; // User explicitly spoke, reset loop counter
             }
           }
 
           if (data.serverContent?.outputTranscription) {
             const aiText = data.serverContent.outputTranscription.text;
             if (aiText) {
-              transcriptRef.current += `\\nElyra: ${aiText}`;
+              transcriptRef.current += `\nElyra: ${aiText}`;
             }
           }
 
@@ -600,17 +607,41 @@ export function useLiveSession() {
             const runAllTools = async () => {
               const responses = [];
               const now = Date.now();
+              lastToolExecutionTimeRef.current = now;
+
+              // Safeguard against runaway autonomous loops:
+              // If tools are called consecutively without any new user voice transcription, stop after 2 turns!
+              toolsSinceLastUserSpeechRef.current += 1;
+              if (toolsSinceLastUserSpeechRef.current > 2) {
+                console.warn('Autonomous loop breaker triggered: Maximum tool turns reached without new user speech.');
+                for (const call of data.toolCall.functionCalls) {
+                  responses.push({
+                    id: call.id || "1",
+                    name: call.name,
+                    response: { result: "Action completed. Waiting for user's next voice command." }
+                  });
+                }
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({
+                    toolResponse: { functionResponses: responses }
+                  }));
+                  ws.send(JSON.stringify({
+                    clientContent: { turnComplete: true }
+                  }));
+                }
+                return;
+              }
 
               for (const call of data.toolCall.functionCalls) {
                 const argsStr = JSON.stringify(call.args || {});
 
-                // Prevent duplicate tool execution caused by slow-network retry loops (2-second window)
+                // Prevent duplicate tool execution (8-second window)
                 const isDuplicate = recentToolCallsRef.current.some(
-                  t => t.name === call.name && t.args === argsStr && (now - t.time) < 2000
+                  t => t.name === call.name && t.args === argsStr && (now - t.time) < 8000
                 );
 
                 if (isDuplicate) {
-                  console.log('Skipping duplicate tool call due to slow network retry loop:', call.name);
+                  console.log('Skipping duplicate tool call due to re-trigger loop:', call.name);
                   responses.push({
                     id: call.id || "1",
                     name: call.name,
@@ -620,8 +651,8 @@ export function useLiveSession() {
                 }
 
                 recentToolCallsRef.current.push({ name: call.name, args: argsStr, time: now });
-                // Keep history clean (only last 10 seconds)
-                recentToolCallsRef.current = recentToolCallsRef.current.filter(t => (now - t.time) < 10000);
+                // Keep history clean (only last 15 seconds)
+                recentToolCallsRef.current = recentToolCallsRef.current.filter(t => (now - t.time) < 15000);
 
                 responses.push(await executeFunctionCall(call));
               }

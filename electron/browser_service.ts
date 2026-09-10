@@ -182,6 +182,21 @@ export class DirectBrowserEngine {
     return page;
   }
 
+  private matchesDomain(url1: string, url2: string): boolean {
+    try {
+      const u1 = new URL(url1).hostname.replace(/^www\./, '').toLowerCase();
+      const u2 = new URL(url2).hostname.replace(/^www\./, '').toLowerCase();
+      if (u1 === u2) return true;
+      if (u1.includes('whatsapp') && u2.includes('whatsapp')) return true;
+      if ((u1.includes('chatgpt') || u1.includes('openai')) && (u2.includes('chatgpt') || u2.includes('openai'))) return true;
+      if (u1.includes('youtube') && u2.includes('youtube')) return true;
+      if (u1.includes('github') && u2.includes('github')) return true;
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   public async navigate(url: string, newTab: boolean = false): Promise<string> {
     try {
       let finalUrl = url;
@@ -198,6 +213,19 @@ export class DirectBrowserEngine {
         return `Opened new tab and navigated to ${finalUrl}`;
       }
 
+      // Check if target website is already open in an existing tab to prevent overwriting active tabs
+      const pages = await this.getWebPages();
+      for (let i = 0; i < pages.length; i++) {
+        const p = pages[i];
+        if (this.matchesDomain(p.url(), finalUrl)) {
+          this.page = p;
+          await this.page.bringToFront();
+          let title = 'Tab';
+          try { title = await p.title(); } catch (e) {}
+          return `Tab "${title}" was already open. Switched to it instead of overwriting active tab.`;
+        }
+      }
+
       const page = await this.getActivePage();
       await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.bringToFront();
@@ -209,19 +237,35 @@ export class DirectBrowserEngine {
 
   public async newTab(url?: string): Promise<string> {
     try {
-      const context = await this.ensureContext();
-      const page = await context.newPage();
-      this.page = page;
-
       if (url && url.trim() !== '') {
         let finalUrl = url.trim();
         if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
           finalUrl = `https://${finalUrl}`;
         }
+
+        // Avoid opening duplicate tabs for already open major services (e.g. WhatsApp, ChatGPT)
+        const pages = await this.getWebPages();
+        for (let i = 0; i < pages.length; i++) {
+          const p = pages[i];
+          if (this.matchesDomain(p.url(), finalUrl)) {
+            this.page = p;
+            await this.page.bringToFront();
+            let title = 'Tab';
+            try { title = await p.title(); } catch (e) {}
+            return `Tab "${title}" was already open. Switched to it instead of duplicating.`;
+          }
+        }
+
+        const context = await this.ensureContext();
+        const page = await context.newPage();
+        this.page = page;
         await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.bringToFront();
         return `Opened new tab at ${finalUrl}`;
       } else {
+        const context = await this.ensureContext();
+        const page = await context.newPage();
+        this.page = page;
         await page.bringToFront();
         return `Opened new empty tab.`;
       }
