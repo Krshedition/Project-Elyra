@@ -29,8 +29,12 @@ IMPORTANT USER CONTEXT (MEMORY):
 CRITICAL INSTRUCTION: You are a desktop automation agent. You HAVE FULL CAPABILITY to control the user's computer using your tools. Do NOT refuse requests to type, click, open apps, shut down, or list processes by saying "I cannot do that." You CAN do that using your tools.
 
   You have access to tools including:
-  1. 'browser_navigate': Use it whenever the user asks you to open a website, go to a URL, or search for something online. NEVER use 'open_app' with 'brave' for this.
-  2. 'desktopAction': Use it to automate the OS. You can 'open_app', 'close_app', 'type_text', 'press_key', 
+  1. 'browser_navigate': Use it whenever the user asks you to open a website, go to a URL, or search for something online. Set newTab: true ONLY if the user explicitly asks to open in a new tab or open another tab. By default, it reuses the current tab. NEVER use 'open_app' with 'brave' for this.
+  2. 'browser_new_tab': Opens a brand new tab, optionally with a URL.
+  3. 'browser_switch_tab': Switches focus to an existing tab by title, keyword (e.g. 'youtube', 'instagram', 'github'), or tab number (1, 2, 3...).
+  4. 'browser_list_tabs': Lists all currently open tabs in Brave so you know what tabs exist and which is active.
+  5. 'browser_close_tab': Closes the current active tab, or a specific tab by title or number.
+  6. 'desktopAction': Use it to automate the OS. You can 'open_app', 'close_app', 'type_text', 'press_key', 
 'system_action', 'get_running_processes', 'kill_process', 'get_focused_window', 'get_system_info', 'set_volume', 
 'set_brightness', 'toggle_wifi', 'toggle_bluetooth', 'set_display_resolution', 'set_default_audio_device', 
 'get_audio_devices', 'file_system_action', 'read_clipboard', 'write_clipboard'.
@@ -181,11 +185,43 @@ export function useLiveSession() {
               },
               {
                 name: "browser_navigate",
-                description: "Navigate the automation browser to a given URL. Use this ONLY to open websites, do not try to use any other tools.",
+                description: "Navigate the automation browser to a given URL. Reuses the current tab by default, or opens in a new tab if newTab is true.",
                 parameters: {
                   type: "OBJECT",
-                  properties: { url: { type: "STRING" } },
+                  properties: {
+                    url: { type: "STRING", description: "The URL or website to navigate to." },
+                    newTab: { type: "BOOLEAN", description: "Set to true if user explicitly asks to open in a new tab or another tab. Defaults to false (reuses current tab)." }
+                  },
                   required: ["url"]
+                }
+              },
+              {
+                name: "browser_new_tab",
+                description: "Opens a brand new browser tab, optionally navigating to a URL.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    url: { type: "STRING", description: "Optional URL to open in the new tab." }
+                  }
+                }
+              },
+              {
+                name: "browser_list_tabs",
+                description: "Lists all currently open tabs in Brave with their index, title, URL, and active status.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {}
+                }
+              },
+              {
+                name: "browser_switch_tab",
+                description: "Switches to an existing tab by title, URL keyword (e.g. 'youtube', 'instagram', 'github'), or tab index (1, 2, 3...).",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    target: { type: "STRING", description: "Title or URL keyword or 1-based index of the tab to switch to." }
+                  },
+                  required: ["target"]
                 }
               },
               {
@@ -265,8 +301,13 @@ export function useLiveSession() {
               },
               {
                 name: "browser_close_tab",
-                description: "Closes the current automation browser tab.",
-                parameters: { type: "OBJECT", properties: {} }
+                description: "Closes the current browser tab, or closes a specific tab by title/index.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    target: { type: "STRING", description: "Optional title, URL keyword, or 1-based index of the tab to close. If omitted, closes the current active tab." }
+                  }
+                }
               },
               {
                 name: "browser_press_key",
@@ -647,16 +688,37 @@ export function useLiveSession() {
     const { id, name, args } = functionCall;
 
     if (name === 'browser_navigate') {
-      console.log('Navigating browser:', args.url);
+      console.log('Navigating browser:', args.url, 'newTab:', args.newTab);
       if ((window as any).ipcRenderer?.browserNavigate) {
-        const result = await (window as any).ipcRenderer.browserNavigate(args.url);
+        const result = await (window as any).ipcRenderer.browserNavigate(args.url, args.newTab);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_navigate') {
-      console.log('Browser navigating to:', args.url);
-      if ((window as any).ipcRenderer?.browserNavigate) {
-        const result = await (window as any).ipcRenderer.browserNavigate(args.url);
+    } else if (name === 'browser_new_tab') {
+      console.log('Opening new tab:', args.url);
+      if ((window as any).ipcRenderer?.browserNewTab) {
+        const result = await (window as any).ipcRenderer.browserNewTab(args.url);
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_list_tabs') {
+      console.log('Listing open tabs');
+      if ((window as any).ipcRenderer?.browserListTabs) {
+        const result = await (window as any).ipcRenderer.browserListTabs();
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_switch_tab') {
+      console.log('Switching tab to:', args.target);
+      if ((window as any).ipcRenderer?.browserSwitchTab) {
+        const result = await (window as any).ipcRenderer.browserSwitchTab(args.target);
+        return { id: id || "1", name, response: { result } };
+      }
+      return { id: id || "1", name, response: { error: "IPC not available" } };
+    } else if (name === 'browser_close_tab') {
+      console.log('Closing browser tab:', args.target);
+      if ((window as any).ipcRenderer?.browserCloseTab) {
+        const result = await (window as any).ipcRenderer.browserCloseTab(args.target);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };

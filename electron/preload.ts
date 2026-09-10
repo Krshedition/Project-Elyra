@@ -56,8 +56,17 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   setWindowMode(mode: 'compact' | 'expanded') {
     return ipcRenderer.send('set-window-mode', mode)
   },
-  browserNavigate(url: string) {
-    return ipcRenderer.invoke('browser:navigate', url)
+  browserNavigate(url: string, newTab: boolean = false) {
+    return ipcRenderer.invoke('browser:navigate', { url, newTab })
+  },
+  browserNewTab(url?: string) {
+    return ipcRenderer.invoke('browser:newTab', url)
+  },
+  browserListTabs() {
+    return ipcRenderer.invoke('browser:listTabs')
+  },
+  browserSwitchTab(target: string | number) {
+    return ipcRenderer.invoke('browser:switchTab', target)
   },
   browserClickText(text: string) {
     return ipcRenderer.invoke('browser:clickText', text)
@@ -80,8 +89,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   browserFillForm(fields: {id: number, text: string}[]) {
     return ipcRenderer.invoke('browser:fillForm', fields)
   },
-  browserCloseTab() {
-    return ipcRenderer.invoke('browser:closeTab')
+  browserCloseTab(target?: string | number) {
+    return ipcRenderer.invoke('browser:closeTab', target)
   },
   browserPressKey(key: string) {
     return ipcRenderer.invoke('browser:pressKey', key)

@@ -125,9 +125,27 @@ ipcMain.handle('process-memory-worker', async (event, { transcript, apiKey }) =>
   return true;
 });
 
-ipcMain.handle('browser:navigate', async (event, url: string) => {
+ipcMain.handle('browser:navigate', async (event, payload: { url: string, newTab?: boolean } | string, maybeNewTab?: boolean) => {
   const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().navigate(url);
+  if (typeof payload === 'object' && payload !== null) {
+    return await DirectBrowserEngine.getInstance().navigate(payload.url, !!payload.newTab);
+  }
+  return await DirectBrowserEngine.getInstance().navigate(payload, !!maybeNewTab);
+});
+
+ipcMain.handle('browser:newTab', async (event, url?: string) => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().newTab(url);
+});
+
+ipcMain.handle('browser:listTabs', async () => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().listTabs();
+});
+
+ipcMain.handle('browser:switchTab', async (event, target: string | number) => {
+  const { DirectBrowserEngine } = require('./browser_service');
+  return await DirectBrowserEngine.getInstance().switchTab(target);
 });
 
 ipcMain.handle('browser:clickText', async (event, text: string) => {
@@ -165,9 +183,9 @@ ipcMain.handle('browser:fillForm', async (event, fields: {id: number, text: stri
   return await DirectBrowserEngine.getInstance().fillForm(fields);
 });
 
-ipcMain.handle('browser:closeTab', async () => {
+ipcMain.handle('browser:closeTab', async (event, target?: string | number) => {
   const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().closeTab();
+  return await DirectBrowserEngine.getInstance().closeTab(target);
 });
 
 ipcMain.handle('browser:pressKey', async (event, key: string) => {

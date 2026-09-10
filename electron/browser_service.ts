@@ -92,19 +92,40 @@ export class DirectBrowserEngine {
     }
   }
 
+  private async ensureContext(): Promise<BrowserContext> {
+    try {
+      if (this.browser && !this.browser.isConnected()) {
+        this.browser = null;
+        this.context = null;
+        this.page = null;
+      }
+    } catch (e) {
+      this.browser = null;
+      this.context = null;
+      this.page = null;
+    }
+
+    if (!this.browser || !this.context) {
+      await this.start();
+    }
+
+    if (!this.context) {
+      const contexts = this.browser?.contexts() || [];
+      if (contexts.length > 0) {
+        this.context = contexts[0];
+      } else {
+        throw new Error("No browser context available.");
+      }
+    }
+
+    return this.context;
+  }
+
   private async getActivePage(): Promise<Page> {
-    if (!this.context) {
-      const pages = this.browser?.contexts()[0]?.pages() || [];
-      if (pages.length > 0) this.context = this.browser!.contexts()[0];
-    }
-
-    if (!this.context) {
-      throw new Error("No browser context available.");
-    }
-
-    const pages = this.context.pages().filter(p => !p.isClosed());
+    const context = await this.ensureContext();
+    const pages = context.pages().filter(p => !p.isClosed());
     if (pages.length === 0) {
-      this.page = await this.context.newPage();
+      this.page = await context.newPage();
       return this.page;
     }
 
@@ -130,39 +151,123 @@ export class DirectBrowserEngine {
   }
 
   private async ensurePage(): Promise<Page> {
-    try {
-      if (this.browser && !this.browser.isConnected()) {
-        this.browser = null;
-        this.context = null;
-        this.page = null;
-      }
-    } catch (e) {
-      this.browser = null;
-      this.context = null;
-      this.page = null;
-    }
-
-    if (!this.browser || !this.context) {
-      await this.start();
-    }
-
+    await this.ensureContext();
     return await this.getActivePage();
   }
 
-  public async navigate(url: string): Promise<string> {
+  public async navigate(url: string, newTab: boolean = false): Promise<string> {
     try {
-      const page = await this.getActivePage();
-      
       let finalUrl = url;
       if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
         finalUrl = `https://${finalUrl}`;
       }
-      
+
+      if (newTab) {
+        const context = await this.ensureContext();
+        const page = await context.newPage();
+        this.page = page;
+        await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.bringToFront();
+        return `Opened new tab and navigated to ${finalUrl}`;
+      }
+
+      const page = await this.getActivePage();
       await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.bringToFront();
       return `Navigated to ${finalUrl}`;
     } catch (err: any) {
       return `Failed to navigate: ${err.message}`;
+    }
+  }
+
+  public async newTab(url?: string): Promise<string> {
+    try {
+      const context = await this.ensureContext();
+      const page = await context.newPage();
+      this.page = page;
+
+      if (url && url.trim() !== '') {
+        let finalUrl = url.trim();
+        if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+          finalUrl = `https://${finalUrl}`;
+        }
+        await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.bringToFront();
+        return `Opened new tab at ${finalUrl}`;
+      } else {
+        await page.bringToFront();
+        return `Opened new empty tab.`;
+      }
+    } catch (err: any) {
+      return `Failed to open new tab: ${err.message}`;
+    }
+  }
+
+  public async listTabs(): Promise<string> {
+    try {
+      const context = await this.ensureContext();
+      const pages = context.pages().filter(p => !p.isClosed());
+      if (pages.length === 0) {
+        return "No open browser tabs found.";
+      }
+
+      const lines: string[] = [];
+      for (let i = 0; i < pages.length; i++) {
+        const p = pages[i];
+        let title = 'Untitled';
+        try { title = await p.title(); } catch (e) {}
+        const url = p.url();
+        let isVisible = false;
+        try { isVisible = await p.evaluate(() => document.visibilityState === 'visible'); } catch (e) {}
+        lines.push(`Tab ${i + 1}: "${title || 'Untitled'}" [${url}]${isVisible ? ' (ACTIVE/VISIBLE)' : ''}`);
+      }
+      return lines.join('\n');
+    } catch (err: any) {
+      return `Failed to list tabs: ${err.message}`;
+    }
+  }
+
+  public async switchTab(target: string | number): Promise<string> {
+    try {
+      const context = await this.ensureContext();
+      const pages = context.pages().filter(p => !p.isClosed());
+      if (pages.length === 0) {
+        return "No open tabs to switch to.";
+      }
+
+      let targetIndex = -1;
+      const targetStr = String(target).trim();
+      const parsedNum = parseInt(targetStr, 10);
+
+      // Check if user specified a 1-based tab number (e.g. 1, 2, "tab 2")
+      if (!isNaN(parsedNum) && parsedNum >= 1 && parsedNum <= pages.length) {
+        targetIndex = parsedNum - 1;
+      } else {
+        // Search by title or URL keyword (e.g. "youtube", "instagram", "github")
+        const query = targetStr.toLowerCase();
+        for (let i = 0; i < pages.length; i++) {
+          const p = pages[i];
+          let title = '';
+          try { title = (await p.title()).toLowerCase(); } catch (e) {}
+          const url = p.url().toLowerCase();
+          if (title.includes(query) || url.includes(query)) {
+            targetIndex = i;
+            break;
+          }
+        }
+      }
+
+      if (targetIndex === -1) {
+        return `Could not find any open tab matching "${target}". Use 'browser_list_tabs' to see open tabs.`;
+      }
+
+      this.page = pages[targetIndex];
+      await this.page.bringToFront();
+      let activeTitle = 'Tab';
+      try { activeTitle = await this.page.title(); } catch (e) {}
+      return `Switched to Tab ${targetIndex + 1}: "${activeTitle}".`;
+    } catch (err: any) {
+      return `Failed to switch tab: ${err.message}`;
     }
   }
 
@@ -376,26 +481,65 @@ export class DirectBrowserEngine {
     }
   }
 
-  public async closeTab(): Promise<string> {
+  public async closeTab(target?: string | number): Promise<string> {
     try {
-      if (!this.page || this.page.isClosed()) {
-        return "No active tab to close.";
+      const context = await this.ensureContext();
+      const pages = context.pages().filter(p => !p.isClosed());
+      if (pages.length === 0) {
+        return "No open tabs to close.";
       }
-      await this.page.close();
-      this.page = null;
-      
-      if (this.context) {
-        const pages = this.context.pages().filter(p => !p.isClosed());
-        if (pages.length > 0) {
-          this.page = pages[pages.length - 1];
-          await this.page.bringToFront();
-          return "Tab closed. Switched to another open tab.";
+
+      let pageToClose: Page | null = null;
+      let closedIndex = -1;
+
+      if (target !== undefined && target !== null && String(target).trim() !== '') {
+        const targetStr = String(target).trim();
+        const parsedNum = parseInt(targetStr, 10);
+        if (!isNaN(parsedNum) && parsedNum >= 1 && parsedNum <= pages.length) {
+          closedIndex = parsedNum - 1;
+          pageToClose = pages[closedIndex];
         } else {
-          this.page = null;
-          return "Closed the last tab. No more open tabs in browser.";
+          const targetLower = targetStr.toLowerCase();
+          for (let i = 0; i < pages.length; i++) {
+            const p = pages[i];
+            let title = '';
+            try { title = (await p.title()).toLowerCase(); } catch (e) {}
+            const url = p.url().toLowerCase();
+            if (title.includes(targetLower) || url.includes(targetLower)) {
+              closedIndex = i;
+              pageToClose = p;
+              break;
+            }
+          }
         }
       }
-      return "Tab closed.";
+
+      // If no target specified or target not found, close current page
+      if (!pageToClose) {
+        pageToClose = this.page && !this.page.isClosed() ? this.page : pages[pages.length - 1];
+        closedIndex = pages.indexOf(pageToClose);
+      }
+
+      let title = 'Tab';
+      try { title = await pageToClose.title(); } catch (e) {}
+      await pageToClose.close();
+
+      if (this.page === pageToClose) {
+        this.page = null;
+      }
+
+      const remainingPages = context.pages().filter(p => !p.isClosed());
+      if (remainingPages.length > 0) {
+        const nextIndex = Math.min(Math.max(0, closedIndex), remainingPages.length - 1);
+        this.page = remainingPages[nextIndex];
+        await this.page.bringToFront();
+        let nextTitle = '';
+        try { nextTitle = await this.page.title(); } catch (e) {}
+        return `Closed tab "${title}". Switched to "${nextTitle}".`;
+      } else {
+        this.page = null;
+        return `Closed tab "${title}". No more open tabs in browser.`;
+      }
     } catch (err: any) {
       return `Failed to close tab: ${err.message}`;
     }
