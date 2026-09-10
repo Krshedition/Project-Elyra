@@ -771,13 +771,6 @@ export function useLiveSession() {
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_close_tab') {
-      console.log('Browser closing tab');
-      if ((window as any).ipcRenderer?.browserCloseTab) {
-        const result = await (window as any).ipcRenderer.browserCloseTab();
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
     } else if (name === 'browser_press_key') {
       console.log('Browser pressing key:', args.key);
       if ((window as any).ipcRenderer?.browserPressKey) {

@@ -30,8 +30,11 @@ export function initMemory() {
   `);
 }
 
-export function saveFact(category: string, key: string, value: string) {
+export function saveFact(category: string, key: string, value: any) {
   if (!db) throw new Error("DB not initialized");
+  const catStr = String(category || 'personal');
+  const keyStr = String(key || 'general');
+  const valStr = typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '');
   const stmt = db.prepare(`
     INSERT INTO user_facts (category, key, value, confidence, updated_at) 
     VALUES (@category, @key, @value, 1, CURRENT_TIMESTAMP)
@@ -41,7 +44,7 @@ export function saveFact(category: string, key: string, value: string) {
       confidence = user_facts.confidence + 1,
       updated_at = CURRENT_TIMESTAMP
   `);
-  stmt.run({ category, key, value });
+  stmt.run({ category: catStr, key: keyStr, value: valStr });
 }
 
 export function deleteFact(key: string) {
@@ -50,8 +53,11 @@ export function deleteFact(key: string) {
   stmt.run({ key });
 }
 
-export function updateFact(oldKey: string, category: string, key: string, value: string) {
+export function updateFact(oldKey: string, category: string, key: string, value: any) {
   if (!db) throw new Error("DB not initialized");
+  const catStr = String(category || 'personal');
+  const keyStr = String(key || 'general');
+  const valStr = typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '');
   const transaction = db.transaction(() => {
     const delStmt = db.prepare(`DELETE FROM user_facts WHERE key = @oldKey`);
     delStmt.run({ oldKey });
@@ -65,7 +71,7 @@ export function updateFact(oldKey: string, category: string, key: string, value:
         confidence = user_facts.confidence + 1,
         updated_at = CURRENT_TIMESTAMP
     `);
-    insStmt.run({ category, key, value });
+    insStmt.run({ category: catStr, key: keyStr, value: valStr });
   });
   transaction();
 }

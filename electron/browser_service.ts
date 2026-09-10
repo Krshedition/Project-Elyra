@@ -121,16 +121,44 @@ export class DirectBrowserEngine {
     return this.context;
   }
 
-  private async getActivePage(): Promise<Page> {
+  private async getWebPages(): Promise<Page[]> {
     const context = await this.ensureContext();
-    const pages = context.pages().filter(p => !p.isClosed());
+    const allPages = context.pages().filter(p => !p.isClosed());
+    const webPages = allPages.filter(p => {
+      const u = p.url();
+      return !u.startsWith('chrome-extension://') && !u.startsWith('devtools://');
+    });
+    return webPages.length > 0 ? webPages : allPages;
+  }
+
+  private async getActivePage(): Promise<Page> {
+    const pages = await this.getWebPages();
     if (pages.length === 0) {
+      const context = await this.ensureContext();
       this.page = await context.newPage();
       return this.page;
     }
 
-    // Identify the active/focused tab that the user is currently looking at in Brave
-    for (const p of pages) {
+    // 1. If Elyra has an active working tab (from newTab, switchTab, or recent navigate), PRESERVE IT!
+    // NEVER overwrite an active working tab with pages[0]!
+    if (this.page && !this.page.isClosed() && pages.includes(this.page)) {
+      return this.page;
+    }
+
+    // 2. If no tab is tracked or it was closed, find the active tab in Brave (scan newest to oldest)
+    for (let i = pages.length - 1; i >= 0; i--) {
+      const p = pages[i];
+      try {
+        const hasFocus = await p.evaluate(() => document.hasFocus());
+        if (hasFocus) {
+          this.page = p;
+          return p;
+        }
+      } catch (e) {}
+    }
+
+    for (let i = pages.length - 1; i >= 0; i--) {
+      const p = pages[i];
       try {
         const isVisible = await p.evaluate(() => document.visibilityState === 'visible');
         if (isVisible) {
@@ -140,19 +168,18 @@ export class DirectBrowserEngine {
       } catch (e) {}
     }
 
-    // If previously tracked page is still open, reuse it
-    if (this.page && !this.page.isClosed()) {
-      return this.page;
-    }
-
-    // Otherwise use the last active tab in the browser
+    // 3. Fallback to the latest opened tab
     this.page = pages[pages.length - 1];
     return this.page;
   }
 
   private async ensurePage(): Promise<Page> {
     await this.ensureContext();
-    return await this.getActivePage();
+    const page = await this.getActivePage();
+    try {
+      await page.bringToFront();
+    } catch (e) {}
+    return page;
   }
 
   public async navigate(url: string, newTab: boolean = false): Promise<string> {
@@ -205,21 +232,20 @@ export class DirectBrowserEngine {
 
   public async listTabs(): Promise<string> {
     try {
-      const context = await this.ensureContext();
-      const pages = context.pages().filter(p => !p.isClosed());
+      const pages = await this.getWebPages();
       if (pages.length === 0) {
         return "No open browser tabs found.";
       }
 
+      const activePage = await this.getActivePage();
       const lines: string[] = [];
       for (let i = 0; i < pages.length; i++) {
         const p = pages[i];
         let title = 'Untitled';
         try { title = await p.title(); } catch (e) {}
         const url = p.url();
-        let isVisible = false;
-        try { isVisible = await p.evaluate(() => document.visibilityState === 'visible'); } catch (e) {}
-        lines.push(`Tab ${i + 1}: "${title || 'Untitled'}" [${url}]${isVisible ? ' (ACTIVE/VISIBLE)' : ''}`);
+        const isActive = p === activePage;
+        lines.push(`Tab ${i + 1}: "${title || 'Untitled'}" [${url}]${isActive ? ' (ACTIVE/SELECTED)' : ''}`);
       }
       return lines.join('\n');
     } catch (err: any) {
@@ -229,8 +255,7 @@ export class DirectBrowserEngine {
 
   public async switchTab(target: string | number): Promise<string> {
     try {
-      const context = await this.ensureContext();
-      const pages = context.pages().filter(p => !p.isClosed());
+      const pages = await this.getWebPages();
       if (pages.length === 0) {
         return "No open tabs to switch to.";
       }
@@ -483,8 +508,7 @@ export class DirectBrowserEngine {
 
   public async closeTab(target?: string | number): Promise<string> {
     try {
-      const context = await this.ensureContext();
-      const pages = context.pages().filter(p => !p.isClosed());
+      const pages = await this.getWebPages();
       if (pages.length === 0) {
         return "No open tabs to close.";
       }
@@ -528,7 +552,7 @@ export class DirectBrowserEngine {
         this.page = null;
       }
 
-      const remainingPages = context.pages().filter(p => !p.isClosed());
+      const remainingPages = await this.getWebPages();
       if (remainingPages.length > 0) {
         const nextIndex = Math.min(Math.max(0, closedIndex), remainingPages.length - 1);
         this.page = remainingPages[nextIndex];
