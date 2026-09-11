@@ -125,12 +125,12 @@ ipcMain.handle('process-memory-worker', async (event, { transcript, apiKey }) =>
   return true;
 });
 
-ipcMain.handle('browser:navigate', async (event, payload: { url: string, newTab?: boolean } | string, maybeNewTab?: boolean) => {
+ipcMain.handle('browser:navigate', async (event, payload: { url: string, newTab?: boolean, tabId?: number | string } | string, maybeNewTab?: boolean, maybeTabId?: number | string) => {
   const { DirectBrowserEngine } = require('./browser_service');
   if (typeof payload === 'object' && payload !== null) {
-    return await DirectBrowserEngine.getInstance().navigate(payload.url, !!payload.newTab);
+    return await DirectBrowserEngine.getInstance().navigate(payload.url, !!payload.newTab, payload.tabId);
   }
-  return await DirectBrowserEngine.getInstance().navigate(payload, !!maybeNewTab);
+  return await DirectBrowserEngine.getInstance().navigate(payload, !!maybeNewTab, maybeTabId);
 });
 
 ipcMain.handle('browser:newTab', async (event, url?: string) => {
@@ -148,39 +148,51 @@ ipcMain.handle('browser:switchTab', async (event, target: string | number) => {
   return await DirectBrowserEngine.getInstance().switchTab(target);
 });
 
-ipcMain.handle('browser:clickText', async (event, text: string) => {
+ipcMain.handle('browser:clickText', async (event, payload: { text: string, tabId?: number | string } | string, maybeTabId?: number | string) => {
   const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().clickByText(text);
+  if (typeof payload === 'object' && payload !== null) {
+    return await DirectBrowserEngine.getInstance().clickByText(payload.text, payload.tabId);
+  }
+  return await DirectBrowserEngine.getInstance().clickByText(payload, maybeTabId);
 });
 
-ipcMain.handle('browser:typeInput', async (event, payload: { selector?: string, text: string, pressEnter: boolean }) => {
+ipcMain.handle('browser:typeInput', async (event, payload: { selector?: string, text: string, pressEnter: boolean, tabId?: number | string }) => {
   const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().typeInput(payload.selector, payload.text, payload.pressEnter);
+  return await DirectBrowserEngine.getInstance().typeInput(payload.selector, payload.text, payload.pressEnter, payload.tabId);
 });
 
-ipcMain.handle('browser:clickVideo', async () => {
+ipcMain.handle('browser:clickVideo', async (event, tabId?: number | string) => {
   const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().clickFirstYouTubeVideo();
+  return await DirectBrowserEngine.getInstance().clickFirstYouTubeVideo(tabId);
 });
 
-ipcMain.handle('browser:scroll', async (event, direction: 'up' | 'down' | 'top' | 'bottom') => {
+ipcMain.handle('browser:scroll', async (event, payload: { direction: 'up' | 'down' | 'top' | 'bottom', tabId?: number | string } | 'up' | 'down' | 'top' | 'bottom', maybeTabId?: number | string) => {
   const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().scroll(direction);
+  if (typeof payload === 'object' && payload !== null) {
+    return await DirectBrowserEngine.getInstance().scroll(payload.direction, payload.tabId);
+  }
+  return await DirectBrowserEngine.getInstance().scroll(payload, maybeTabId);
 });
 
-ipcMain.handle('browser:analyzePage', async () => {
+ipcMain.handle('browser:analyzePage', async (event, tabId?: number | string) => {
   const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().analyzePage();
+  return await DirectBrowserEngine.getInstance().analyzePage(tabId);
 });
 
-ipcMain.handle('browser:clickElement', async (event, id: number) => {
+ipcMain.handle('browser:clickElement', async (event, payload: { id: number, tabId?: number | string } | number, maybeTabId?: number | string) => {
   const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().clickElement(id);
+  if (typeof payload === 'object' && payload !== null) {
+    return await DirectBrowserEngine.getInstance().clickElement(payload.id, payload.tabId);
+  }
+  return await DirectBrowserEngine.getInstance().clickElement(payload, maybeTabId);
 });
 
-ipcMain.handle('browser:fillForm', async (event, fields: {id: number, text: string}[]) => {
+ipcMain.handle('browser:fillForm', async (event, payload: { fields: {id: number, text: string}[], tabId?: number | string } | {id: number, text: string}[], maybeTabId?: number | string) => {
   const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().fillForm(fields);
+  if (typeof payload === 'object' && payload !== null && !Array.isArray(payload) && (payload as any).fields) {
+    return await DirectBrowserEngine.getInstance().fillForm((payload as any).fields, (payload as any).tabId);
+  }
+  return await DirectBrowserEngine.getInstance().fillForm(payload as any, maybeTabId);
 });
 
 ipcMain.handle('browser:closeTab', async (event, target?: string | number) => {
@@ -188,9 +200,12 @@ ipcMain.handle('browser:closeTab', async (event, target?: string | number) => {
   return await DirectBrowserEngine.getInstance().closeTab(target);
 });
 
-ipcMain.handle('browser:pressKey', async (event, key: string) => {
+ipcMain.handle('browser:pressKey', async (event, payload: { key: string, tabId?: number | string } | string, maybeTabId?: number | string) => {
   const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().pressKey(key);
+  if (typeof payload === 'object' && payload !== null) {
+    return await DirectBrowserEngine.getInstance().pressKey(payload.key, payload.tabId);
+  }
+  return await DirectBrowserEngine.getInstance().pressKey(payload, maybeTabId);
 });
 
 ipcMain.handle('search-memory', async (event, query: string) => {

@@ -29,11 +29,13 @@ IMPORTANT USER CONTEXT (MEMORY):
 CRITICAL INSTRUCTION: You are a desktop automation agent. You HAVE FULL CAPABILITY to control the user's computer using your tools. Do NOT refuse requests to type, click, open apps, shut down, or list processes by saying "I cannot do that." You CAN do that using your tools.
 
   You have access to tools including:
-  1. 'browser_navigate': Use it whenever the user asks you to open a website, go to a URL, or search for something online. Set newTab: true ONLY if the user explicitly asks to open in a new tab or open another tab. By default, it reuses the current tab. NEVER use 'open_app' with 'brave' for this.
-  2. 'browser_new_tab': Opens a brand new tab, optionally with a URL.
-  3. 'browser_switch_tab': Switches focus to an existing tab by title, keyword (e.g. 'youtube', 'instagram', 'github'), or tab number (1, 2, 3...).
-  4. 'browser_list_tabs': Lists all currently open tabs in Brave so you know what tabs exist and which is active.
-  5. 'browser_close_tab': Closes the current active tab, or a specific tab by title or number.
+  1. 'browser_navigate': Use it whenever the user asks you to open a website, go to a URL, or search for something online. Set newTab: true ONLY if the user explicitly asks to open in a new tab or open another tab. By default, it reuses the current tab. Can also target a specific tab via 'tabId'.
+  2. 'browser_new_tab': Opens a brand new tab, optionally with a URL. Returns the assigned Tab ID (e.g. Tab ID 2).
+  3. 'browser_switch_tab': Switches focus to an existing tab by Tab ID (1, 2, 3...) or title keyword.
+  4. 'browser_list_tabs': Lists all currently open tabs in Brave with their unique Tab IDs, titles, URLs, and active status.
+  5. 'browser_close_tab': Closes a specific tab by Tab ID or title.
+  TAB ID MULTI-TAB PROTOCOL:
+  Every browser tab has a unique numeric Tab ID (1, 2, 3...). When working with multiple tabs (e.g. WhatsApp on Tab 1, ChatGPT on Tab 2), you can directly pass 'tabId' to browser actions ('browser_type_input', 'browser_click_text', 'browser_click_video', 'browser_scroll', 'browser_analyze_page', 'browser_navigate') to interact with that exact tab!
   6. 'desktopAction': Use it to automate the OS. You can 'open_app', 'close_app', 'type_text', 'press_key', 
 'system_action', 'get_running_processes', 'kill_process', 'get_focused_window', 'get_system_info', 'set_volume', 
 'set_brightness', 'toggle_wifi', 'toggle_bluetooth', 'set_display_resolution', 'set_default_audio_device', 
@@ -189,19 +191,20 @@ export function useLiveSession() {
               },
               {
                 name: "browser_navigate",
-                description: "Navigate the automation browser to a given URL. Reuses the current tab by default, or opens in a new tab if newTab is true.",
+                description: "Navigate the automation browser to a given URL. Reuses the current tab by default, or opens in a new tab if newTab is true. Can optionally target a specific tab via tabId.",
                 parameters: {
                   type: "OBJECT",
                   properties: {
                     url: { type: "STRING", description: "The URL or website to navigate to." },
-                    newTab: { type: "BOOLEAN", description: "Set to true if user explicitly asks to open in a new tab or another tab. Defaults to false (reuses current tab)." }
+                    newTab: { type: "BOOLEAN", description: "Set to true if user explicitly asks to open in a new tab or another tab. Defaults to false (reuses current tab)." },
+                    tabId: { type: "INTEGER", description: "Optional Tab ID to target. If omitted, uses current active tab." }
                   },
                   required: ["url"]
                 }
               },
               {
                 name: "browser_new_tab",
-                description: "Opens a brand new browser tab, optionally navigating to a URL.",
+                description: "Opens a brand new browser tab, optionally navigating to a URL. Returns the assigned Tab ID (e.g. Tab ID 2).",
                 parameters: {
                   type: "OBJECT",
                   properties: {
@@ -211,7 +214,7 @@ export function useLiveSession() {
               },
               {
                 name: "browser_list_tabs",
-                description: "Lists all currently open tabs in Brave with their index, title, URL, and active status.",
+                description: "Lists all currently open tabs in Brave with their unique Tab IDs, titles, URLs, and active status.",
                 parameters: {
                   type: "OBJECT",
                   properties: {}
@@ -219,33 +222,37 @@ export function useLiveSession() {
               },
               {
                 name: "browser_switch_tab",
-                description: "Switches to an existing tab by title, URL keyword (e.g. 'youtube', 'instagram', 'github'), or tab index (1, 2, 3...).",
+                description: "Switches to an existing tab by Tab ID (1, 2, 3...) or title/URL keyword.",
                 parameters: {
                   type: "OBJECT",
                   properties: {
-                    target: { type: "STRING", description: "Title or URL keyword or 1-based index of the tab to switch to." }
+                    target: { type: "STRING", description: "Tab ID number (e.g. '1', '2') or title/URL keyword of the tab to switch to." }
                   },
                   required: ["target"]
                 }
               },
               {
                 name: "browser_click_text",
-                description: "Click an element in the browser by its visible text.",
+                description: "Click an element in the browser by its visible text. Can target a specific tab via tabId.",
                 parameters: {
                   type: "OBJECT",
-                  properties: { text: { type: "STRING", description: "The exact visible text of the button or link to click" } },
+                  properties: {
+                    text: { type: "STRING", description: "The exact visible text of the button or link to click" },
+                    tabId: { type: "INTEGER", description: "Optional Tab ID to target. If omitted, uses current active tab." }
+                  },
                   required: ["text"]
                 }
               },
               {
                 name: "browser_type_input",
-                description: "Type text into a browser input field. Can optionally press Enter.",
+                description: "Type text into a browser input field. Can optionally press Enter and target a specific tab via tabId.",
                 parameters: {
                   type: "OBJECT",
                   properties: {
                     selector: { type: "STRING", description: "Optional CSS selector for the input. If empty, types into the first visible input." },
                     text: { type: "STRING", description: "Text to type" },
-                    pressEnter: { type: "BOOLEAN", description: "Whether to press Enter after typing" }
+                    pressEnter: { type: "BOOLEAN", description: "Whether to press Enter after typing" },
+                    tabId: { type: "INTEGER", description: "Optional Tab ID to target. If omitted, uses current active tab." }
                   },
                   required: ["text", "pressEnter"]
                 }
@@ -255,34 +262,45 @@ export function useLiveSession() {
                 description: "Specifically clicks the first YouTube video result on a YouTube search page or homepage.",
                 parameters: {
                   type: "OBJECT",
-                  properties: {}
+                  properties: {
+                    tabId: { type: "INTEGER", description: "Optional Tab ID containing the YouTube page. If omitted, uses active tab." }
+                  }
                 }
               },
               {
                 name: "browser_scroll",
-                description: "Scroll the automation browser page.",
+                description: "Scroll the automation browser page. Can target a specific tab via tabId.",
                 parameters: {
                   type: "OBJECT",
                   properties: {
                     direction: {
                       type: "STRING",
                       description: "The direction to scroll. MUST be one of: 'up', 'down', 'top', 'bottom'"
-                    }
+                    },
+                    tabId: { type: "INTEGER", description: "Optional Tab ID to scroll. If omitted, uses active tab." }
                   },
                   required: ["direction"]
                 }
               },
               {
                 name: "browser_analyze_page",
-                description: "Analyzes the current page, draws numbered tags over all interactive elements, and returns a map of their IDs. Use this only as a fallback if you cannot interact using text.",
-                parameters: { type: "OBJECT", properties: {} }
+                description: "Analyzes the page, draws numbered tags over interactive elements, and returns a map of their IDs. Can target a specific tab via tabId.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    tabId: { type: "INTEGER", description: "Optional Tab ID to analyze. If omitted, uses active tab." }
+                  }
+                }
               },
               {
                 name: "browser_click_element",
-                description: "Click an element using its numeric ID obtained from browser_analyze_page.",
+                description: "Click an element using its numeric ID obtained from browser_analyze_page. Can target a specific tab via tabId.",
                 parameters: {
                   type: "OBJECT",
-                  properties: { id: { type: "INTEGER" } },
+                  properties: {
+                    id: { type: "INTEGER", description: "Element ID to click" },
+                    tabId: { type: "INTEGER", description: "Optional Tab ID to target. If omitted, uses active tab." }
+                  },
                   required: ["id"]
                 }
               },
@@ -298,27 +316,31 @@ export function useLiveSession() {
                         type: "OBJECT",
                         properties: { id: { type: "INTEGER" }, text: { type: "STRING" } }
                       }
-                    }
+                    },
+                    tabId: { type: "INTEGER", description: "Optional Tab ID to target. If omitted, uses active tab." }
                   },
                   required: ["fields"]
                 }
               },
               {
                 name: "browser_close_tab",
-                description: "Closes the current browser tab, or closes a specific tab by title/index.",
+                description: "Closes the current browser tab, or closes a specific tab by Tab ID (1, 2, 3...) or title.",
                 parameters: {
                   type: "OBJECT",
                   properties: {
-                    target: { type: "STRING", description: "Optional title, URL keyword, or 1-based index of the tab to close. If omitted, closes the current active tab." }
+                    target: { type: "STRING", description: "Optional Tab ID (e.g. '1', '2') or title keyword of the tab to close. If omitted, closes the current active tab." }
                   }
                 }
               },
               {
                 name: "browser_press_key",
-                description: "Press a specific keyboard key inside the automation browser (e.g., 'Enter', 'Escape', 'Tab', 'ArrowDown'). Useful for submitting forms.",
+                description: "Press a specific keyboard key inside the automation browser (e.g., 'Enter', 'Escape', 'Tab', 'ArrowDown').",
                 parameters: {
                   type: "OBJECT",
-                  properties: { key: { type: "STRING" } },
+                  properties: {
+                    key: { type: "STRING" },
+                    tabId: { type: "INTEGER", description: "Optional Tab ID to press key in. If omitted, uses active tab." }
+                  },
                   required: ["key"]
                 }
               },
@@ -720,9 +742,9 @@ export function useLiveSession() {
     const { id, name, args } = functionCall;
 
     if (name === 'browser_navigate') {
-      console.log('Navigating browser:', args.url, 'newTab:', args.newTab);
+      console.log('Navigating browser:', args.url, 'newTab:', args.newTab, 'tabId:', args.tabId);
       if ((window as any).ipcRenderer?.browserNavigate) {
-        const result = await (window as any).ipcRenderer.browserNavigate(args.url, args.newTab);
+        const result = await (window as any).ipcRenderer.browserNavigate(args.url, args.newTab, args.tabId);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
@@ -741,72 +763,72 @@ export function useLiveSession() {
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
     } else if (name === 'browser_switch_tab') {
-      console.log('Switching tab to:', args.target);
+      console.log('Switching tab to:', args.target || args.tabId);
       if ((window as any).ipcRenderer?.browserSwitchTab) {
-        const result = await (window as any).ipcRenderer.browserSwitchTab(args.target);
+        const result = await (window as any).ipcRenderer.browserSwitchTab(args.target || args.tabId);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
     } else if (name === 'browser_close_tab') {
-      console.log('Closing browser tab:', args.target);
+      console.log('Closing browser tab:', args.target || args.tabId);
       if ((window as any).ipcRenderer?.browserCloseTab) {
-        const result = await (window as any).ipcRenderer.browserCloseTab(args.target);
+        const result = await (window as any).ipcRenderer.browserCloseTab(args.target || args.tabId);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
     } else if (name === 'browser_click_text') {
-      console.log('Browser clicking text:', args.text);
+      console.log('Browser clicking text:', args.text, 'tabId:', args.tabId);
       if ((window as any).ipcRenderer?.browserClickText) {
-        const result = await (window as any).ipcRenderer.browserClickText(args.text);
+        const result = await (window as any).ipcRenderer.browserClickText(args.text, args.tabId);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
     } else if (name === 'browser_type_input') {
-      console.log('Browser typing input:', args.text);
+      console.log('Browser typing input:', args.text, 'tabId:', args.tabId);
       if ((window as any).ipcRenderer?.browserTypeInput) {
-        const result = await (window as any).ipcRenderer.browserTypeInput(args.selector, args.text, args.pressEnter);
+        const result = await (window as any).ipcRenderer.browserTypeInput(args.selector, args.text, args.pressEnter, args.tabId);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
     } else if (name === 'browser_click_video') {
-      console.log('Browser clicking video');
+      console.log('Browser clicking video, tabId:', args.tabId);
       if ((window as any).ipcRenderer?.browserClickVideo) {
-        const result = await (window as any).ipcRenderer.browserClickVideo();
+        const result = await (window as any).ipcRenderer.browserClickVideo(args.tabId);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
     } else if (name === 'browser_scroll') {
-      console.log('Browser scrolling:', args.direction);
+      console.log('Browser scrolling:', args.direction, 'tabId:', args.tabId);
       if ((window as any).ipcRenderer?.browserScroll) {
-        const result = await (window as any).ipcRenderer.browserScroll(args.direction);
+        const result = await (window as any).ipcRenderer.browserScroll(args.direction, args.tabId);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
     } else if (name === 'browser_analyze_page') {
-      console.log('Analyzing browser page');
+      console.log('Analyzing browser page, tabId:', args.tabId);
       if ((window as any).ipcRenderer?.browserAnalyzePage) {
-        const result = await (window as any).ipcRenderer.browserAnalyzePage();
+        const result = await (window as any).ipcRenderer.browserAnalyzePage(args.tabId);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
     } else if (name === 'browser_click_element') {
-      console.log('Browser clicking element:', args.id);
+      console.log('Browser clicking element:', args.id, 'tabId:', args.tabId);
       if ((window as any).ipcRenderer?.browserClickElement) {
-        const result = await (window as any).ipcRenderer.browserClickElement(args.id);
+        const result = await (window as any).ipcRenderer.browserClickElement(args.id, args.tabId);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
     } else if (name === 'browser_fill_form') {
-      console.log('Browser filling form:', args.fields);
+      console.log('Browser filling form:', args.fields, 'tabId:', args.tabId);
       if ((window as any).ipcRenderer?.browserFillForm) {
-        const result = await (window as any).ipcRenderer.browserFillForm(args.fields);
+        const result = await (window as any).ipcRenderer.browserFillForm(args.fields, args.tabId);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };
     } else if (name === 'browser_press_key') {
-      console.log('Browser pressing key:', args.key);
+      console.log('Browser pressing key:', args.key, 'tabId:', args.tabId);
       if ((window as any).ipcRenderer?.browserPressKey) {
-        const result = await (window as any).ipcRenderer.browserPressKey(args.key);
+        const result = await (window as any).ipcRenderer.browserPressKey(args.key, args.tabId);
         return { id: id || "1", name, response: { result } };
       }
       return { id: id || "1", name, response: { error: "IPC not available" } };

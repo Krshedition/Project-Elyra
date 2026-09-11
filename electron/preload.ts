@@ -56,8 +56,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   setWindowMode(mode: 'compact' | 'expanded') {
     return ipcRenderer.send('set-window-mode', mode)
   },
-  browserNavigate(url: string, newTab: boolean = false) {
-    return ipcRenderer.invoke('browser:navigate', { url, newTab })
+  browserNavigate(url: string, newTab: boolean = false, tabId?: number | string) {
+    return ipcRenderer.invoke('browser:navigate', { url, newTab, tabId })
   },
   browserNewTab(url?: string) {
     return ipcRenderer.invoke('browser:newTab', url)
@@ -68,31 +68,31 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   browserSwitchTab(target: string | number) {
     return ipcRenderer.invoke('browser:switchTab', target)
   },
-  browserClickText(text: string) {
-    return ipcRenderer.invoke('browser:clickText', text)
+  browserClickText(text: string, tabId?: number | string) {
+    return ipcRenderer.invoke('browser:clickText', { text, tabId })
   },
-  browserTypeInput(selector: string | undefined, text: string, pressEnter: boolean) {
-    return ipcRenderer.invoke('browser:typeInput', { selector, text, pressEnter })
+  browserTypeInput(selector: string | undefined, text: string, pressEnter: boolean, tabId?: number | string) {
+    return ipcRenderer.invoke('browser:typeInput', { selector, text, pressEnter, tabId })
   },
-  browserClickVideo() {
-    return ipcRenderer.invoke('browser:clickVideo')
+  browserClickVideo(tabId?: number | string) {
+    return ipcRenderer.invoke('browser:clickVideo', tabId)
   },
-  browserScroll(direction: 'up' | 'down' | 'top' | 'bottom') {
-    return ipcRenderer.invoke('browser:scroll', direction)
+  browserScroll(direction: 'up' | 'down' | 'top' | 'bottom', tabId?: number | string) {
+    return ipcRenderer.invoke('browser:scroll', { direction, tabId })
   },
-  browserAnalyzePage() {
-    return ipcRenderer.invoke('browser:analyzePage')
+  browserAnalyzePage(tabId?: number | string) {
+    return ipcRenderer.invoke('browser:analyzePage', tabId)
   },
-  browserClickElement(id: number) {
-    return ipcRenderer.invoke('browser:clickElement', id)
+  browserClickElement(id: number, tabId?: number | string) {
+    return ipcRenderer.invoke('browser:clickElement', { id, tabId })
   },
-  browserFillForm(fields: {id: number, text: string}[]) {
-    return ipcRenderer.invoke('browser:fillForm', fields)
+  browserFillForm(fields: {id: number, text: string}[], tabId?: number | string) {
+    return ipcRenderer.invoke('browser:fillForm', { fields, tabId })
   },
   browserCloseTab(target?: string | number) {
     return ipcRenderer.invoke('browser:closeTab', target)
   },
-  browserPressKey(key: string) {
-    return ipcRenderer.invoke('browser:pressKey', key)
+  browserPressKey(key: string, tabId?: number | string) {
+    return ipcRenderer.invoke('browser:pressKey', { key, tabId })
   }
 })
