@@ -120,8 +120,8 @@ Project Elyra/
 │
 ├── electron/                          # Electron Main Process & Native Handlers
 │   ├── action_handler.ts              # Bridges desktop action IPC calls to C++ addon or PowerShell
-│   ├── browser_service.ts             # DirectBrowserEngine: Playwright CDP controller & DOM tagger
-│   ├── main.ts                        # Electron entry point: window management, IPC registration, life-cycle
+│   ├── browser_service.ts             # DirectBrowserEngine: Playwright CDP controller, tab manager & DOM tagger
+│   ├── main.ts                        # Electron entry point: window management, IPC registration, lifecycle
 │   ├── memory.ts                      # SQLite memory layer & background Gemini summarization worker
 │   ├── preload.ts                     # ContextBridge exposing secure IPC APIs to React renderer
 │   └── validator.ts                   # Security layer validating and sanitizing AI tool arguments
@@ -131,23 +131,21 @@ Project Elyra/
 │   ├── automation.cpp                 # Win32, WMI, WLAN, WinRT, and Core Audio implementations
 │   └── automation.h                   # C++ Automation namespace declarations and function signatures
 │
-├── src/                               # React Frontend (Renderer Process)
-│   ├── App.tsx                        # Root component managing window mode and widget states
-│   ├── App.css / index.css            # Base stylesheet and typography imports
-│   ├── WaveWidget.tsx                 # Main visual interface (orb, boot sequence, reactive waveform)
-│   ├── main.tsx                       # React DOM root bootstrapping
-│   │
-│   ├── components/
-│   │   └── MemoryManager.tsx          # Glassmorphic modal to view, search, add, edit & delete facts
-│   │
-│   ├── hooks/
-│   │   └── useLiveSession.ts          # Central hook: WebSocket lifecycle, tool routing, WebRTC vision, audio
-│   │
-│   └── lib/
-│       ├── audio-recorder.ts          # 16kHz PCM16 mic capture and RMS volume calculation
-│       └── audio-streamer.ts          # 24kHz PCM16 queue playback, FFT analyser, and interruption
-│
-└── test_browser.ts                    # Standalone verification script for browser automation
+└── src/                               # React Frontend (Renderer Process)
+    ├── App.tsx                        # Root component managing window mode and widget states
+    ├── index.css                      # Base stylesheet and typography imports
+    ├── WaveWidget.tsx                 # Main visual interface (orb, boot sequence, reactive waveform)
+    ├── main.tsx                       # React DOM root bootstrapping
+    │
+    ├── components/
+    │   └── MemoryManager.tsx          # Glassmorphic modal to view, search, add, edit & delete facts
+    │
+    ├── hooks/
+    │   └── useLiveSession.ts          # Central hook: WebSocket lifecycle, unified tool dispatcher, vision, audio
+    │
+    └── lib/
+        ├── audio-recorder.ts          # 16kHz PCM16 mic capture and RMS volume calculation
+        └── audio-streamer.ts          # 24kHz PCM16 queue playback, FFT analyser, and interruption
 ```
 
 ---
@@ -162,16 +160,26 @@ Project Elyra/
   - An event-driven diffing engine samples a downscaled 64x36 `<canvas>` every 4 seconds.
   - Computes a pixel delta against the previous snapshot. **If less than 3% of pixels have changed, the frame is dropped**. If dynamic activity is detected, a compressed 720p JPEG is streamed to Gemini. This achieves up to **85% bandwidth reduction** during idle screen states.
 
-### 5.2 Playwright Web Automation & Visual DOM Tagging
-Located in `electron/browser_service.ts`, `DirectBrowserEngine` acts as an intelligent web co-pilot:
-1. **CDP Connection**: Attempts to connect to an existing Brave instance via Chrome DevTools Protocol at `http://localhost:9222`. If not found, it automatically locates `brave.exe` and launches it with `--remote-debugging-port=9222`.
-2. **Direct Text Actions**: High-speed interaction via `browser_click_text` and `browser_type_input`. Leverages Playwright's locator engine with case-insensitive `aria-label` fallbacks.
+### 5.2 Playwright Web Automation & Multi-Tab Orchestration
+Located in `electron/browser_service.ts`, `DirectBrowserEngine` controls an active Brave Browser session:
+1. **CDP Connection**: Connects to an active Brave instance over Chrome DevTools Protocol at `http://localhost:9222`. If Brave is closed or running without remote debugging, it restarts Brave with `--remote-debugging-port=9222 --restore-last-session`.
+2. **Multi-Tab Architecture & Tab ID Protocol**:
+   - Maintains a synchronized map of tab contexts (`tabIdMap: Map<number, Page>` and `pageToIdMap: WeakMap<Page, number>`).
+   - Each tab is assigned a stable numeric identifier (`Tab ID 1, 2, 3...`).
+   - `browser_new_tab`: Launches new tabs and returns their assigned Tab ID.
+   - `browser_switch_tab`: Brings a specific tab to focus via Tab ID or title/URL matching.
+   - `browser_list_tabs`: Reports all open tabs, their IDs, page titles, active URLs, and focus state.
+   - `browser_close_tab`: Terminates specific tabs cleanly by Tab ID or title.
+   - **Targeted Tab Execution**: High-level actions (`browser_navigate`, `browser_type_input`, `browser_click_text`, `browser_click_video`, `browser_scroll`, and `browser_analyze_page`) accept an optional `tabId`. This allows Elyra to execute actions directly on secondary tabs without losing place or swapping contexts unintentionally.
 3. **Visual DOM Tagging (`browser_analyze_page`)**:
    - Injects a script into the DOM that identifies up to 200 visible, interactable elements (`<a>`, `<button>`, `<input>`, `[role="button"]`, etc.).
    - Appends high-contrast visual badges (`.elyra-tag-overlay`) containing numeric IDs `[1]`, `[2]`, `[3]` directly above the elements.
    - Assigns corresponding `data-elyra-id` attributes to DOM nodes and returns a structured summary to the AI model.
    - Elyra can then execute pinpoint actions like `browser_click_element(id)` or multi-field form fills (`browser_fill_form`) without fragile CSS selectors.
 4. **Dedicated YouTube Navigation**: Employs custom CSS locators (`ytd-rich-grid-media a#video-title`) for instantaneous one-shot video playback (`browser_click_video`).
+5. **Autonomous Loop Breaker**:
+   - Embedded in `src/hooks/useLiveSession.ts`, a safety governor tracks consecutive tool calls executed without new user voice transcriptions (`toolsSinceLastUserSpeechRef`).
+   - If autonomous tool executions chain repeatedly (e.g., recursive tab loops), execution halts after two turns and waits for user confirmation before proceeding.
 
 ### 5.3 Native Windows C++ Engine (`elyra_automation.node`)
 Built with `node-addon-api` and compiled via `binding.gyp`, the C++ addon executes directly against Windows operating system APIs without spawning external shells where possible:
@@ -191,6 +199,7 @@ Located in `electron/memory.ts`:
   - `sessions`: `(id, created_at, summary, day_of_week)`
 - **Dynamic Context Injection**: Every time a live conversation starts, all stored facts are extracted, formatted, and injected directly into Elyra's system instructions.
 - **Confidence Scoring**: If an existing fact key is reaffirmed in subsequent conversations, its `confidence` score increments.
+- **Shared Session Digest**: Both the background memory worker and direct IPC digest invocations route through a unified `applySessionDigest` helper, deduplicating updates and maintaining consistency.
 - **Background Intelligence Worker**:
   - Upon session disconnection or during an 8.5-minute state-aware session swap, the full conversation transcript is sent to `runMemoryWorkerMain`.
   - Utilizing `gemini-2.5-flash` with structured JSON output, the worker extracts a concise 2-sentence summary and analyzes explicit and implicit user facts (categorized into `personal`, `tech_stack`, `preferences`, and `project_goals`).
@@ -212,42 +221,61 @@ Located in `src/WaveWidget.tsx`:
   - 🔴 **Error**: Red accent with explanatory hover tooltip.
 - **Memory Manager Modal**: Frameless popover allowing the user to search, inspect confidence levels, manually add, edit, or delete memories.
 
-### 5.6 Security, Validation & Confirmation Protocols
-Located in `electron/validator.ts`:
+### 5.6 Security, Validation & Unified Dispatch Architecture
+Located across `electron/validator.ts`, `electron/main.ts`, and `src/hooks/useLiveSession.ts`:
 - **Input Sanitization**: Action arguments from the AI are validated with regex to prevent command injection (e.g., verifying `appName` and `processName` do not contain command chaining characters).
+- **Strict Error Signatures**: Validation failures consistently adhere to the `{ valid: boolean, error?: string }` contract, ensuring error reasons are accurately surfaced to callers.
 - **Two-Step Confirmation for Destructive Actions**: When Elyra triggers a file deletion or overwrite via `file_system_action`, the tool halts execution and returns a confirmation requirement. Elyra must verbally request user confirmation and re-invoke the tool with `confirmed: true`.
 - **Keystroke Queuing**: Keystroke actions are funneled through a serialized promise chain (`typeQueue`) in `action_handler.ts` to prevent overlapping or garbled keystroke execution.
+- **Unified Tool Dispatcher**: Replaced sprawling per-tool wrappers with a consolidated router in `useLiveSession.ts`, standardizing error logging and response packaging across all browser, desktop, and memory tools.
+- **Singleton Browser Lifecycle**: In `electron/main.ts`, the browser engine is managed as a single top-level singleton, eliminating redundant inline module resolutions.
 
 ---
 
 ## 6. Current Progress & Implementation Status
 
+### Milestone 1: Multimodal Desktop Streaming & Native Hardware Primitives — COMPLETED (100%)
+* **Full-Duplex Audio Streaming:** Bidirectional WebSocket streaming with 16kHz PCM16 microphone capture and 24kHz PCM16 audio playback via Web Audio API.
+* **Instant Barge-In / Interruption:** Cancels in-flight audio buffers instantaneously upon user speech detection.
+* **Visual Screen Diffing:** Samples downscaled display frames every 4 seconds, transmitting compressed 720p JPEGs only when screen changes exceed 3% pixel variance.
+* **Persistent SQLite Core Memory:** `better-sqlite3` storage for long-term facts, confidence weighting, session digests, and background transcript extraction via `gemini-2.5-flash`.
+* **C++ Native Addon (`elyra_automation.node`):** Low-level Win32, WMI, WLAN, and WinRT controls for volume, brightness, display resolution, Wi-Fi, Bluetooth, battery stats, process control, and path-sandboxed file operations.
+* **Glassmorphic Floating UI:** Frameless, transparent Electron overlay with multi-stage ignition boot sequence, 11-bar reactive waveform, and interactive Memory Manager modal.
+
+### Milestone 2: Physical Layer Web Orchestration — COMPLETED (100%)
+* **Brave CDP Automation:** Attach-or-launch Playwright controller over Chrome DevTools Protocol (`localhost:9222`) with session restoration.
+* **Multi-Tab Architecture & Tab ID Routing:** Manages tab contexts via synchronized `tabIdMap` / `pageToIdMap` with stable numeric identifiers (`Tab ID 1, 2, 3...`). Enables independent multi-tab workflows without context collisions.
+* **Dynamic Visual DOM Tagging:** Real-time extraction of interactable elements, visual badge injection (`[1]`, `[2]`, ...), and dual visual/JSON input generation.
+* **Synthetic Event Dispatching:** Programmatic click-by-text, direct selector typing, scroll navigation, multi-field form fills, and one-shot YouTube video playback.
+* **Autonomous Loop Breaker:** Safety governor tracking consecutive tool executions without fresh user speech, preventing runaway re-trigger loops.
+* **Unified Tool Dispatcher & Lean IPC:** Centralized action router in `useLiveSession.ts`, singleton browser lifecycle in `electron/main.ts`, and strict `{ valid, error }` validation signatures.
+
+### Milestone 3: Advanced Background Task Automation — NEXT PHASE (IN PROGRESS)
+* **Silent Email Delivery:** Headless API integrations allowing the AI to compose and send emails in the background without launching a browser window.
+* **Calendar Scheduling:** Background calendar event creation, meeting management, and agenda lookups.
+* **Headless Data Retrieval:** Autonomous background data fetching and information extraction pipelines operating without GUI dependencies.
+
 ```text
-Subsystem / Component                          Status         Progress
+Milestone / Component                         Status         Progress
 ======================================================================
-Gemini Multimodal Live API (WebSocket)         COMPLETED      100%
-Full-Duplex Audio (16kHz in, 24kHz out)        COMPLETED      100%
-Voice Interruption / Barge-in Handling         COMPLETED      100%
-WebRTC Screen Capture with 3% Pixel Diffing    COMPLETED      100%
-State-Aware Session Resumption (8.5 min swap)  COMPLETED      100%
-Playwright CDP Engine for Brave Browser        COMPLETED      100%
-Dynamic DOM Visual Tagging & Element IDs       COMPLETED      100%
-Web Navigation, Text Click & Form Typing       COMPLETED      100%
-YouTube Dedicated Video Player Search          COMPLETED      100%
-SQLite Core Memory Store (better-sqlite3)      COMPLETED      100%
-Background Memory Worker (Gemini 2.5 Flash)    COMPLETED      100%
-Memory Manager UI (Search, Edit, Delete)       COMPLETED      100%
-C++ Addon: App Launch & Graceful Close         COMPLETED      100%
-C++ Addon: Keystroke Injection & Typing Queue  COMPLETED      100%
-C++ Addon: Hardware & Battery Diagnostics      COMPLETED      100%
-C++ Addon: Volume, Brightness, WiFi, BT        COMPLETED      100%
-C++ Addon: Path-Guarded File Operations        COMPLETED      100%
-C++ Addon: Clipboard Read & Write              COMPLETED      100%
-Security Validation Layer (validator.ts)       COMPLETED      100%
-Frameless Glassmorphic UI & WaveWidget         COMPLETED      100%
-Multi-stage Ignition Boot Animation            COMPLETED      100%
-Phase 2: Headless Email & Calendar Agents      UPCOMING         0%
-Phase 2: Vector DB / ChromaDB Semantic Memory  UPCOMING         0%
+M1: Multimodal Live Audio Stream (16k/24k)    COMPLETED      100%
+M1: Barge-in / Interruption Handling          COMPLETED      100%
+M1: 3% Pixel Diffing Screen Capture           COMPLETED      100%
+M1: SQLite Memory Store & Background Worker   COMPLETED      100%
+M1: Native C++ Addon (OS & Hardware APIs)     COMPLETED      100%
+M1: Transparent Glassmorphic Widget UI        COMPLETED      100%
+----------------------------------------------------------------------
+M2: Brave Browser CDP Engine & Lifecycle      COMPLETED      100%
+M2: Multi-Tab Orchestration & Tab ID Protocol COMPLETED      100%
+M2: Dynamic DOM Tagging & Element IDs ([1]..) COMPLETED      100%
+M2: Synthetic Actions (Click, Type, Form)     COMPLETED      100%
+M2: Autonomous Re-trigger Loop Breaker        COMPLETED      100%
+M2: Unified Dispatcher & Streamlined IPC      COMPLETED      100%
+----------------------------------------------------------------------
+M3: Headless Email Dispatch APIs              UPCOMING         0%
+M3: Headless Calendar Scheduling APIs         UPCOMING         0%
+M3: Background Headless Data Retrieval        UPCOMING         0%
+M4: Vector Memory / ChromaDB Semantic Search  PLANNED          0%
 ```
 
 ---
@@ -265,7 +293,7 @@ Phase 2: Vector DB / ChromaDB Semantic Memory  UPCOMING         0%
 
 1. **Clone and Install Node Dependencies**:
    ```bash
-   git clone <repo-url>
+   git clone https://github.com/Krshedition/Project-Elyra.git
    cd "Project Elyra"
    npm install
    ```
@@ -301,14 +329,18 @@ Phase 2: Vector DB / ChromaDB Semantic Memory  UPCOMING         0%
 
 ---
 
-## 8. Roadmap & Phase 2 Evolution
+## 8. Roadmap & Milestone Progression
 
-While Phase 1 focused primarily on the **Playwright Web Controller**, multimodal streaming, and desktop hardware primitives for the college presentation, Phase 2 will focus on:
+Project Elyra follows a milestone-driven development roadmap:
 
-1. **Autonomous Background Task Agents**:
-   - Headless background workers for sending emails (SMTP/OAuth).
-   - Silent calendar scheduling and event monitoring.
-2. **Vector Memory Upgrade**:
-   - Integrate vector embeddings (e.g., SQLite-vss or ChromaDB) alongside the existing SQLite tables to enable semantic similarity queries over years of conversation history.
-3. **Deep Desktop Workflow Orchestration**:
-   - Advanced multi-step desktop tasks (e.g., auto-editing clips in Premiere Pro / DaVinci Resolve, automated file organization, and terminal tasks in Kali Linux / WSL).
+1. **Milestone 1: Multimodal Desktop Streaming & Native OS Primitives** *(Completed)*
+   - Full-duplex real-time audio and vision pipeline with hardware control and SQLite memory.
+2. **Milestone 2: Physical Layer Web Orchestration** *(Completed)*
+   - Multi-tab browser controller, Tab ID routing, dynamic DOM tagging, input dispatching, and loop prevention.
+3. **Milestone 3: Advanced Background Task Automation** *(Active Focus)*
+   - Headless background APIs for silent email composition and delivery.
+   - Background calendar scheduling and event monitoring without GUI overhead.
+   - Silent background web data extraction pipelines.
+4. **Milestone 4: Semantic Vector Memory & Workflow Orchestration** *(Planned)*
+   - Vector embedding retrieval (e.g., SQLite-vss or ChromaDB) for semantic recall across conversation history.
+   - Multi-step cross-application automation (e.g., video editing pipelines, terminal tasks in WSL/Kali, automated workspace organization).
