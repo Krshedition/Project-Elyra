@@ -56,20 +56,20 @@ export function validateAction(actionName: string, args: any): { valid: boolean,
     case 'set_volume':
     case 'set_brightness':
       if (typeof args.level !== 'number' || args.level < 0 || args.level > 100) {
-        return { valid: false, reason: "Level must be a number between 0 and 100" };
+        return { valid: false, error: "Level must be a number between 0 and 100" };
       }
       return { valid: true };
 
     case 'toggle_wifi':
     case 'toggle_bluetooth':
       if (typeof args.enable !== 'boolean') {
-        return { valid: false, reason: "Enable must be a boolean" };
+        return { valid: false, error: "Enable must be a boolean" };
       }
       return { valid: true };
 
     case 'set_display_resolution':
       if (typeof args.width !== 'number' || typeof args.height !== 'number') {
-        return { valid: false, reason: "Width and height must be numbers" };
+        return { valid: false, error: "Width and height must be numbers" };
       }
       return { valid: true };
 

@@ -739,146 +739,83 @@ export function useLiveSession() {
   }, []);
 
   const executeFunctionCall = async (functionCall: any) => {
-    const { id, name, args } = functionCall;
+    const { id, name, args = {} } = functionCall;
+    const callId = id || "1";
+    const ipc = (window as any).ipcRenderer;
 
-    if (name === 'browser_navigate') {
-      console.log('Navigating browser:', args.url, 'newTab:', args.newTab, 'tabId:', args.tabId);
-      if ((window as any).ipcRenderer?.browserNavigate) {
-        const result = await (window as any).ipcRenderer.browserNavigate(args.url, args.newTab, args.tabId);
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_new_tab') {
-      console.log('Opening new tab:', args.url);
-      if ((window as any).ipcRenderer?.browserNewTab) {
-        const result = await (window as any).ipcRenderer.browserNewTab(args.url);
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_list_tabs') {
-      console.log('Listing open tabs');
-      if ((window as any).ipcRenderer?.browserListTabs) {
-        const result = await (window as any).ipcRenderer.browserListTabs();
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_switch_tab') {
-      console.log('Switching tab to:', args.target || args.tabId);
-      if ((window as any).ipcRenderer?.browserSwitchTab) {
-        const result = await (window as any).ipcRenderer.browserSwitchTab(args.target || args.tabId);
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_close_tab') {
-      console.log('Closing browser tab:', args.target || args.tabId);
-      if ((window as any).ipcRenderer?.browserCloseTab) {
-        const result = await (window as any).ipcRenderer.browserCloseTab(args.target || args.tabId);
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_click_text') {
-      console.log('Browser clicking text:', args.text, 'tabId:', args.tabId);
-      if ((window as any).ipcRenderer?.browserClickText) {
-        const result = await (window as any).ipcRenderer.browserClickText(args.text, args.tabId);
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_type_input') {
-      console.log('Browser typing input:', args.text, 'tabId:', args.tabId);
-      if ((window as any).ipcRenderer?.browserTypeInput) {
-        const result = await (window as any).ipcRenderer.browserTypeInput(args.selector, args.text, args.pressEnter, args.tabId);
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_click_video') {
-      console.log('Browser clicking video, tabId:', args.tabId);
-      if ((window as any).ipcRenderer?.browserClickVideo) {
-        const result = await (window as any).ipcRenderer.browserClickVideo(args.tabId);
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_scroll') {
-      console.log('Browser scrolling:', args.direction, 'tabId:', args.tabId);
-      if ((window as any).ipcRenderer?.browserScroll) {
-        const result = await (window as any).ipcRenderer.browserScroll(args.direction, args.tabId);
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_analyze_page') {
-      console.log('Analyzing browser page, tabId:', args.tabId);
-      if ((window as any).ipcRenderer?.browserAnalyzePage) {
-        const result = await (window as any).ipcRenderer.browserAnalyzePage(args.tabId);
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_click_element') {
-      console.log('Browser clicking element:', args.id, 'tabId:', args.tabId);
-      if ((window as any).ipcRenderer?.browserClickElement) {
-        const result = await (window as any).ipcRenderer.browserClickElement(args.id, args.tabId);
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_fill_form') {
-      console.log('Browser filling form:', args.fields, 'tabId:', args.tabId);
-      if ((window as any).ipcRenderer?.browserFillForm) {
-        const result = await (window as any).ipcRenderer.browserFillForm(args.fields, args.tabId);
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'browser_press_key') {
-      console.log('Browser pressing key:', args.key, 'tabId:', args.tabId);
-      if ((window as any).ipcRenderer?.browserPressKey) {
-        const result = await (window as any).ipcRenderer.browserPressKey(args.key, args.tabId);
-        return { id: id || "1", name, response: { result } };
-      }
-      return { id: id || "1", name, response: { error: "IPC not available" } };
-    } else if (name === 'desktopAction') {
-      try {
-        // Construct the nested args object that validator.ts expects
-        const actionArgs: any = {};
-        if (args.appName) actionArgs.appName = args.appName;
-        if (args.text) actionArgs.text = args.text;
-        if (args.key) actionArgs.key = args.key;
-        if (args.action) actionArgs.action = args.action;
-        if (args.processName) actionArgs.processName = args.processName;
-        if (args.level !== undefined) actionArgs.level = args.level;
-        if (args.enable !== undefined) actionArgs.enable = args.enable;
-        if (args.width !== undefined) actionArgs.width = args.width;
-        if (args.height !== undefined) actionArgs.height = args.height;
-        if (args.deviceName) actionArgs.deviceName = args.deviceName;
-        if (args.path) actionArgs.path = args.path;
-        if (args.src) actionArgs.src = args.src;
-        if (args.dest) actionArgs.dest = args.dest;
-        if (args.content) actionArgs.content = args.content;
-        if (args.confirmed !== undefined) actionArgs.confirmed = args.confirmed;
-
-        console.log('Executing desktop action:', args.actionName, actionArgs);
-        if ((window as any).ipcRenderer?.desktopAction) {
-          const res = await (window as any).ipcRenderer.desktopAction(args.actionName, actionArgs);
-          if (res && res.requiresConfirmation) {
-            return { id: id || "1", name, response: { result: res.message, requiresConfirmation: true } };
-          } else {
-            return { id: id || "1", name, response: { result: typeof res === 'string' ? res : JSON.stringify(res) } };
-          }
-        } else {
-          return { id: id || "1", name, response: { error: "Electron IPC not available" } };
-        }
-      } catch (err: any) {
-        return { id: id || "1", name, response: { error: err.message || "Action failed" } };
-      }
-    } else if (name === "search_memory") {
-      try {
-        if ((window as any).ipcRenderer?.searchMemory) {
-          const res = await (window as any).ipcRenderer.searchMemory(args.query);
-          return { id: id || "1", name, response: { result: res } };
-        } else {
-          return { id: id || "1", name, response: { error: "Electron IPC not available" } };
-        }
-      } catch (err: any) {
-        return { id: id || "1", name, response: { error: err.message || "Action failed" } };
-      }
+    if (!ipc) {
+      return { id: callId, name, response: { error: "IPC not available" } };
     }
-    return { id: id || "1", name, response: { error: "Unknown function call" } };
+
+    try {
+      if (name.startsWith('browser_')) {
+        console.log(`[BrowserTool] ${name}:`, args);
+        let result: any;
+        switch (name) {
+          case 'browser_navigate':
+            result = await ipc.browserNavigate(args.url, args.newTab, args.tabId);
+            break;
+          case 'browser_new_tab':
+            result = await ipc.browserNewTab(args.url);
+            break;
+          case 'browser_list_tabs':
+            result = await ipc.browserListTabs();
+            break;
+          case 'browser_switch_tab':
+            result = await ipc.browserSwitchTab(args.target || args.tabId);
+            break;
+          case 'browser_close_tab':
+            result = await ipc.browserCloseTab(args.target || args.tabId);
+            break;
+          case 'browser_click_text':
+            result = await ipc.browserClickText(args.text, args.tabId);
+            break;
+          case 'browser_type_input':
+            result = await ipc.browserTypeInput(args.selector, args.text, args.pressEnter, args.tabId);
+            break;
+          case 'browser_click_video':
+            result = await ipc.browserClickVideo(args.tabId);
+            break;
+          case 'browser_scroll':
+            result = await ipc.browserScroll(args.direction, args.tabId);
+            break;
+          case 'browser_analyze_page':
+            result = await ipc.browserAnalyzePage(args.tabId);
+            break;
+          case 'browser_click_element':
+            result = await ipc.browserClickElement(args.id, args.tabId);
+            break;
+          case 'browser_fill_form':
+            result = await ipc.browserFillForm(args.fields, args.tabId);
+            break;
+          case 'browser_press_key':
+            result = await ipc.browserPressKey(args.key, args.tabId);
+            break;
+          default:
+            return { id: callId, name, response: { error: `Unknown browser action: ${name}` } };
+        }
+        return { id: callId, name, response: { result } };
+      }
+
+      if (name === 'desktopAction') {
+        const { actionName, ...actionArgs } = args;
+        console.log('Executing desktop action:', actionName, actionArgs);
+        const res = await ipc.desktopAction(actionName, actionArgs);
+        if (res?.requiresConfirmation) {
+          return { id: callId, name, response: { result: res.message, requiresConfirmation: true } };
+        }
+        return { id: callId, name, response: { result: typeof res === 'string' ? res : JSON.stringify(res) } };
+      }
+
+      if (name === 'search_memory') {
+        const res = await ipc.searchMemory(args.query);
+        return { id: callId, name, response: { result: res } };
+      }
+
+      return { id: callId, name, response: { error: `Unknown function call: ${name}` } };
+    } catch (err: any) {
+      return { id: callId, name, response: { error: err.message || "Action failed" } };
+    }
   };
 
   const cleanup = () => {

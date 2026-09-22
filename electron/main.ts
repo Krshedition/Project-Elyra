@@ -1,6 +1,19 @@
 import { app, BrowserWindow, ipcMain, screen, session, shell, desktopCapturer } from 'electron';
 import path from 'node:path';
-import { initMemory, getRecentContext, saveSessionSummary, saveFact, getAllFactsDetailed, deleteFact, updateFact } from './memory';
+import { 
+  initMemory, 
+  getRecentContext, 
+  saveFact, 
+  getAllFactsDetailed, 
+  deleteFact, 
+  updateFact, 
+  runMemoryWorkerMain, 
+  searchFacts, 
+  applySessionDigest 
+} from './memory';
+import { DirectBrowserEngine } from './browser_service';
+
+const browser = DirectBrowserEngine.getInstance();
 
 process.env.APP_ROOT = path.join(__dirname, '..');
 
@@ -45,23 +58,20 @@ let pendingMemoryTask: Promise<void> | null = null;
 let isQuitting = false;
 
 app.on('before-quit', (e) => {
-  const { DirectBrowserEngine } = require('./browser_service');
-  
   if (pendingMemoryTask && !isQuitting) {
     e.preventDefault();
     console.log('Main Process: Waiting for memory worker to finish before quitting...');
     
-    // Run cleanup tasks
     Promise.all([
       pendingMemoryTask,
-      DirectBrowserEngine.getInstance().stop().catch(console.error)
+      browser.stop().catch(console.error)
     ]).then(() => {
       isQuitting = true;
       app.quit();
     });
   } else if (!isQuitting) {
     e.preventDefault();
-    DirectBrowserEngine.getInstance().stop()
+    browser.stop()
       .catch(console.error)
       .finally(() => {
         isQuitting = true;
@@ -120,96 +130,81 @@ ipcMain.handle('get-system-context', async () => {
 });
 
 ipcMain.handle('process-memory-worker', async (event, { transcript, apiKey }) => {
-  const { runMemoryWorkerMain } = require('./memory');
   pendingMemoryTask = runMemoryWorkerMain(transcript, apiKey);
   return true;
 });
 
 ipcMain.handle('browser:navigate', async (event, payload: { url: string, newTab?: boolean, tabId?: number | string } | string, maybeNewTab?: boolean, maybeTabId?: number | string) => {
-  const { DirectBrowserEngine } = require('./browser_service');
   if (typeof payload === 'object' && payload !== null) {
-    return await DirectBrowserEngine.getInstance().navigate(payload.url, !!payload.newTab, payload.tabId);
+    return await browser.navigate(payload.url, !!payload.newTab, payload.tabId);
   }
-  return await DirectBrowserEngine.getInstance().navigate(payload, !!maybeNewTab, maybeTabId);
+  return await browser.navigate(payload, !!maybeNewTab, maybeTabId);
 });
 
 ipcMain.handle('browser:newTab', async (event, url?: string) => {
-  const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().newTab(url);
+  return await browser.newTab(url);
 });
 
 ipcMain.handle('browser:listTabs', async () => {
-  const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().listTabs();
+  return await browser.listTabs();
 });
 
 ipcMain.handle('browser:switchTab', async (event, target: string | number) => {
-  const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().switchTab(target);
+  return await browser.switchTab(target);
 });
 
 ipcMain.handle('browser:clickText', async (event, payload: { text: string, tabId?: number | string } | string, maybeTabId?: number | string) => {
-  const { DirectBrowserEngine } = require('./browser_service');
   if (typeof payload === 'object' && payload !== null) {
-    return await DirectBrowserEngine.getInstance().clickByText(payload.text, payload.tabId);
+    return await browser.clickByText(payload.text, payload.tabId);
   }
-  return await DirectBrowserEngine.getInstance().clickByText(payload, maybeTabId);
+  return await browser.clickByText(payload, maybeTabId);
 });
 
 ipcMain.handle('browser:typeInput', async (event, payload: { selector?: string, text: string, pressEnter: boolean, tabId?: number | string }) => {
-  const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().typeInput(payload.selector, payload.text, payload.pressEnter, payload.tabId);
+  return await browser.typeInput(payload.selector, payload.text, payload.pressEnter, payload.tabId);
 });
 
 ipcMain.handle('browser:clickVideo', async (event, tabId?: number | string) => {
-  const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().clickFirstYouTubeVideo(tabId);
+  return await browser.clickFirstYouTubeVideo(tabId);
 });
 
 ipcMain.handle('browser:scroll', async (event, payload: { direction: 'up' | 'down' | 'top' | 'bottom', tabId?: number | string } | 'up' | 'down' | 'top' | 'bottom', maybeTabId?: number | string) => {
-  const { DirectBrowserEngine } = require('./browser_service');
   if (typeof payload === 'object' && payload !== null) {
-    return await DirectBrowserEngine.getInstance().scroll(payload.direction, payload.tabId);
+    return await browser.scroll(payload.direction, payload.tabId);
   }
-  return await DirectBrowserEngine.getInstance().scroll(payload, maybeTabId);
+  return await browser.scroll(payload, maybeTabId);
 });
 
 ipcMain.handle('browser:analyzePage', async (event, tabId?: number | string) => {
-  const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().analyzePage(tabId);
+  return await browser.analyzePage(tabId);
 });
 
 ipcMain.handle('browser:clickElement', async (event, payload: { id: number, tabId?: number | string } | number, maybeTabId?: number | string) => {
-  const { DirectBrowserEngine } = require('./browser_service');
   if (typeof payload === 'object' && payload !== null) {
-    return await DirectBrowserEngine.getInstance().clickElement(payload.id, payload.tabId);
+    return await browser.clickElement(payload.id, payload.tabId);
   }
-  return await DirectBrowserEngine.getInstance().clickElement(payload, maybeTabId);
+  return await browser.clickElement(payload, maybeTabId);
 });
 
 ipcMain.handle('browser:fillForm', async (event, payload: { fields: {id: number, text: string}[], tabId?: number | string } | {id: number, text: string}[], maybeTabId?: number | string) => {
-  const { DirectBrowserEngine } = require('./browser_service');
   if (typeof payload === 'object' && payload !== null && !Array.isArray(payload) && (payload as any).fields) {
-    return await DirectBrowserEngine.getInstance().fillForm((payload as any).fields, (payload as any).tabId);
+    return await browser.fillForm((payload as any).fields, (payload as any).tabId);
   }
-  return await DirectBrowserEngine.getInstance().fillForm(payload as any, maybeTabId);
+  return await browser.fillForm(payload as any, maybeTabId);
 });
 
 ipcMain.handle('browser:closeTab', async (event, target?: string | number) => {
-  const { DirectBrowserEngine } = require('./browser_service');
-  return await DirectBrowserEngine.getInstance().closeTab(target);
+  return await browser.closeTab(target);
 });
 
 ipcMain.handle('browser:pressKey', async (event, payload: { key: string, tabId?: number | string } | string, maybeTabId?: number | string) => {
-  const { DirectBrowserEngine } = require('./browser_service');
   if (typeof payload === 'object' && payload !== null) {
-    return await DirectBrowserEngine.getInstance().pressKey(payload.key, payload.tabId);
+    return await browser.pressKey(payload.key, payload.tabId);
   }
-  return await DirectBrowserEngine.getInstance().pressKey(payload, maybeTabId);
+  return await browser.pressKey(payload, maybeTabId);
 });
 
 ipcMain.handle('search-memory', async (event, query: string) => {
-  const { searchFacts } = require('./memory');
   return searchFacts(query);
 });
 
@@ -233,22 +228,9 @@ ipcMain.handle('update-fact-manual', async (event, payload: { oldKey: string, ca
 });
 
 ipcMain.handle('save-session-digest', async (event, payload) => {
-  if (payload.summary) {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const dayOfWeek = days[new Date().getDay()];
-    saveSessionSummary(payload.summary, dayOfWeek);
-  }
-  if (payload.facts && Array.isArray(payload.facts)) {
-    for (const fact of payload.facts) {
-      if (fact.category && fact.key && fact.value) {
-        saveFact(fact.category, fact.key, fact.value);
-      }
-    }
-  }
+  applySessionDigest(payload);
   return true;
 });
-
-
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -263,8 +245,7 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
   initMemory();
-  const { DirectBrowserEngine } = require('./browser_service');
-  DirectBrowserEngine.getInstance().start().catch(console.error);
+  browser.start().catch(console.error);
 
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     if (permission === 'media') {

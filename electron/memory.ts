@@ -146,6 +146,21 @@ export function searchFacts(query: string) {
   return resultStr === 'Memory Results:\\n' ? 'No matching memory found.' : resultStr;
 }
 
+export function applySessionDigest(payload: any) {
+  if (payload?.summary) {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayOfWeek = days[new Date().getDay()];
+    saveSessionSummary(payload.summary, dayOfWeek);
+  }
+  if (Array.isArray(payload?.facts)) {
+    for (const fact of payload.facts) {
+      if (fact.category && fact.key && fact.value) {
+        saveFact(fact.category, fact.key, fact.value);
+      }
+    }
+  }
+}
+
 export async function runMemoryWorkerMain(transcript: string, apiKey: string) {
   if (!transcript.trim()) return;
   try {
@@ -203,12 +218,8 @@ ${transcript}`;
         throw apiErr;
       }
     }
-    
     if (response.text) {
-      let jsonStr = response.text.trim();
-      if (jsonStr.startsWith(`\`\`\`json`)) jsonStr = jsonStr.replace(/\`\`\`json/g, '');
-      if (jsonStr.startsWith(`\`\`\``)) jsonStr = jsonStr.replace(/\`\`\`/g, '');
-      if (jsonStr.endsWith(`\`\`\``)) jsonStr = jsonStr.replace(/\`\`\`/g, '');
+      const jsonStr = response.text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
       const payload = JSON.parse(jsonStr);
       
       if (payload.facts && !Array.isArray(payload.facts) && typeof payload.facts === 'object') {
@@ -223,18 +234,7 @@ ${transcript}`;
          payload.facts = normalizedFacts;
       }
 
-      if (payload.summary) {
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const dayOfWeek = days[new Date().getDay()];
-        saveSessionSummary(payload.summary, dayOfWeek);
-      }
-      if (payload.facts && Array.isArray(payload.facts)) {
-        for (const fact of payload.facts) {
-          if (fact.category && fact.key && fact.value) {
-            saveFact(fact.category, fact.key, fact.value);
-          }
-        }
-      }
+      applySessionDigest(payload);
       console.log('Main Process: Memory updated successfully!');
     }
   } catch (e) {
