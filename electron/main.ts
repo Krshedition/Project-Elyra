@@ -12,8 +12,16 @@ import {
   applySessionDigest 
 } from './memory';
 import { DirectBrowserEngine } from './browser_service';
+import { EmailService } from './email_service';
+import { CalendarService } from './calendar_service';
+import { DataService } from './data_service';
+import { N8nService } from './n8n_service';
 
 const browser = DirectBrowserEngine.getInstance();
+const emailService = EmailService.getInstance();
+const calendarService = CalendarService.getInstance();
+const dataService = DataService.getInstance();
+const n8nService = N8nService.getInstance();
 
 process.env.APP_ROOT = path.join(__dirname, '..');
 
@@ -26,25 +34,31 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 let win: BrowserWindow | null;
 
 function createWindow() {
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-  const WIDGET_WIDTH = 500;
-  const WIDGET_HEIGHT = 150;
+  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
+  const WINDOW_WIDTH = Math.min(1366, Math.max(1200, Math.floor(screenWidth * 0.88)));
+  const WINDOW_HEIGHT = Math.min(840, Math.max(720, Math.floor(screenHeight * 0.88)));
 
   win = new BrowserWindow({
-    width: WIDGET_WIDTH,
-    height: WIDGET_HEIGHT,
-    x: width - WIDGET_WIDTH - 20,
-    y: 20,
-    transparent: true,
+    width: WINDOW_WIDTH,
+    height: WINDOW_HEIGHT,
+    minWidth: 980,
+    minHeight: 620,
+    backgroundColor: '#0B0E17',
     frame: false,
-    alwaysOnTop: true,
-    resizable: false,
-    skipTaskbar: true,
+    resizable: true,
+    alwaysOnTop: false,
+    skipTaskbar: false,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
+  });
+
+  win.center();
+  win.once('ready-to-show', () => {
+    win?.show();
   });
 
   if (VITE_DEV_SERVER_URL) {
@@ -58,6 +72,7 @@ let pendingMemoryTask: Promise<void> | null = null;
 let isQuitting = false;
 
 app.on('before-quit', (e) => {
+  calendarService.stopReminderWorker();
   if (pendingMemoryTask && !isQuitting) {
     e.preventDefault();
     console.log('Main Process: Waiting for memory worker to finish before quitting...');
@@ -98,15 +113,30 @@ ipcMain.handle('open-external', async (event, url) => {
 });
 
 ipcMain.on('set-window-mode', (event, mode: 'compact' | 'expanded') => {
+  // Maintained for backward compatibility
   if (!win) return;
-  const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
-  if (mode === 'compact') {
-    win.setContentSize(500, 150);
-    win.setPosition(screenWidth - 500 - 20, 20);
+});
+
+// Window control handlers for custom desktop titlebar
+ipcMain.on('window:minimize', () => {
+  win?.minimize();
+});
+
+ipcMain.on('window:maximize', () => {
+  if (!win) return;
+  if (win.isMaximized()) {
+    win.unmaximize();
   } else {
-    win.setContentSize(500, 650);
-    win.setPosition(screenWidth - 500 - 20, 20);
+    win.maximize();
   }
+});
+
+ipcMain.on('window:close', () => {
+  win?.close();
+});
+
+ipcMain.handle('window:isMaximized', () => {
+  return win?.isMaximized() ?? false;
 });
 
 // Allow renderer to request the primary screen source ID for WebRTC capture
@@ -230,6 +260,75 @@ ipcMain.handle('update-fact-manual', async (event, payload: { oldKey: string, ca
 ipcMain.handle('save-session-digest', async (event, payload) => {
   applySessionDigest(payload);
   return true;
+});
+
+// ==========================================
+// MILESTONE 3: BACKGROUND TASK AUTOMATION
+// ==========================================
+
+// 1. Headless Email Service & Google Auth
+ipcMain.handle('email:send', async (event, options: { to: string; subject: string; body: string; isHtml?: boolean }) => {
+  return await emailService.sendEmail(options);
+});
+
+ipcMain.handle('email:verifyConfig', async () => {
+  return await emailService.verifyConfig();
+});
+
+ipcMain.handle('email:getConfig', async () => {
+  return emailService.getEmailConfig();
+});
+
+ipcMain.handle('email:connectGoogle', async (event, payload: { email: string; appPassword: string; displayName?: string }) => {
+  return await emailService.connectGoogleAccount(payload.email, payload.appPassword, payload.displayName);
+});
+
+ipcMain.handle('email:disconnectGoogle', async () => {
+  return emailService.disconnectGoogleAccount();
+});
+
+ipcMain.handle('email:openGoogleAppPasswords', async () => {
+  await shell.openExternal('https://myaccount.google.com/apppasswords');
+  return true;
+});
+
+// 2. Headless Calendar Service
+ipcMain.handle('calendar:createEvent', async (event, payload: any) => {
+  return calendarService.createEvent(payload);
+});
+
+ipcMain.handle('calendar:listEvents', async (event, options?: any) => {
+  return calendarService.listEvents(options);
+});
+
+ipcMain.handle('calendar:deleteEvent', async (event, target: string | number) => {
+  return calendarService.deleteEvent(target);
+});
+
+// 3. Headless Data & Search Service
+ipcMain.handle('data:searchWeb', async (event, query: string) => {
+  return await dataService.searchWeb(query);
+});
+
+ipcMain.handle('data:fetchWeather', async (event, city?: string) => {
+  return await dataService.fetchWeather(city);
+});
+
+ipcMain.handle('data:fetchUrlContent', async (event, url: string) => {
+  return await dataService.fetchUrlContent(url);
+});
+
+ipcMain.handle('data:fetchCrypto', async (event, symbol: string) => {
+  return await dataService.fetchCrypto(symbol);
+});
+
+// 4. n8n Workflow Webhook Bridge
+ipcMain.handle('n8n:triggerWorkflow', async (event, payload: { workflowName: string; payload: Record<string, any> }) => {
+  return await n8nService.triggerWorkflow(payload);
+});
+
+ipcMain.handle('n8n:checkHealth', async () => {
+  return await n8nService.checkHealth();
 });
 
 const gotTheLock = app.requestSingleInstanceLock();

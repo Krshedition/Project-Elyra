@@ -27,7 +27,26 @@ export function initMemory() {
       confidence INTEGER DEFAULT 1,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS calendar_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT,
+      start_time TEXT NOT NULL,
+      end_time TEXT,
+      attendees TEXT,
+      reminder_minutes INTEGER DEFAULT 15,
+      notified INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
+}
+
+export function getMemoryDb(): Database.Database {
+  if (!db) {
+    initMemory();
+  }
+  return db!;
 }
 
 export function saveFact(category: string, key: string, value: any) {

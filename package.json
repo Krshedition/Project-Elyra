@@ -33,12 +33,16 @@
       {
         "from": "bin",
         "to": "bin",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "build/Release",
         "to": "build/Release",
-        "filter": ["*.node"]
+        "filter": [
+          "*.node"
+        ]
       }
     ],
     "asarUnpack": [
@@ -49,7 +53,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -68,6 +74,7 @@
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.16.0",
     "node-addon-api": "^8.8.0",
+    "nodemailer": "^10.0.10",
     "playwright": "^1.62.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
@@ -77,6 +84,7 @@
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.12.3",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",

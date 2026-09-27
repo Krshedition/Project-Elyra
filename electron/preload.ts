@@ -91,5 +91,62 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
   browserPressKey(key: string, tabId?: number | string) {
     return ipcRenderer.invoke('browser:pressKey', { key, tabId })
+  },
+  sendEmail(options: { to: string; subject: string; body: string; isHtml?: boolean }) {
+    return ipcRenderer.invoke('email:send', options)
+  },
+  verifyEmailConfig() {
+    return ipcRenderer.invoke('email:verifyConfig')
+  },
+  getEmailConfig() {
+    return ipcRenderer.invoke('email:getConfig')
+  },
+  connectGoogle(payload: { email: string; appPassword: string; displayName?: string }) {
+    return ipcRenderer.invoke('email:connectGoogle', payload)
+  },
+  disconnectGoogle() {
+    return ipcRenderer.invoke('email:disconnectGoogle')
+  },
+  openGoogleAppPasswords() {
+    return ipcRenderer.invoke('email:openGoogleAppPasswords')
+  },
+  calendarCreateEvent(payload: { title: string; startTime: string; endTime?: string; description?: string; attendees?: string; reminderMinutes?: number }) {
+    return ipcRenderer.invoke('calendar:createEvent', payload)
+  },
+  calendarListEvents(options?: { dateFilter?: 'today' | 'upcoming' | 'all'; limit?: number }) {
+    return ipcRenderer.invoke('calendar:listEvents', options)
+  },
+  calendarDeleteEvent(target: string | number) {
+    return ipcRenderer.invoke('calendar:deleteEvent', target)
+  },
+  dataSearchWeb(query: string) {
+    return ipcRenderer.invoke('data:searchWeb', query)
+  },
+  dataFetchWeather(city?: string) {
+    return ipcRenderer.invoke('data:fetchWeather', city)
+  },
+  dataFetchUrlContent(url: string) {
+    return ipcRenderer.invoke('data:fetchUrlContent', url)
+  },
+  dataFetchCrypto(symbol: string) {
+    return ipcRenderer.invoke('data:fetchCrypto', symbol)
+  },
+  n8nTriggerWorkflow(payload: { workflowName: string; payload: Record<string, any> }) {
+    return ipcRenderer.invoke('n8n:triggerWorkflow', payload)
+  },
+  n8nCheckHealth() {
+    return ipcRenderer.invoke('n8n:checkHealth')
+  },
+  windowMinimize() {
+    ipcRenderer.send('window:minimize')
+  },
+  windowMaximize() {
+    ipcRenderer.send('window:maximize')
+  },
+  windowClose() {
+    ipcRenderer.send('window:close')
+  },
+  isWindowMaximized() {
+    return ipcRenderer.invoke('window:isMaximized')
   }
 })

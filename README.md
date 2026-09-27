@@ -272,10 +272,13 @@ M2: Synthetic Actions (Click, Type, Form)     COMPLETED      100%
 M2: Autonomous Re-trigger Loop Breaker        COMPLETED      100%
 M2: Unified Dispatcher & Streamlined IPC      COMPLETED      100%
 ----------------------------------------------------------------------
-M3: Headless Email Dispatch APIs              UPCOMING         0%
-M3: Headless Calendar Scheduling APIs         UPCOMING         0%
-M3: Background Headless Data Retrieval        UPCOMING         0%
-M4: Vector Memory / ChromaDB Semantic Search  PLANNED          0%
+M3: Headless Email Dispatch (Nodemailer SMTP) COMPLETED      100%
+M3: Headless Calendar & Windows Reminders     COMPLETED      100%
+M3: Silent Headless Data Fetcher (Search/API) COMPLETED      100%
+M3: n8n Workflow Webhook Integration Bridge   COMPLETED      100%
+----------------------------------------------------------------------
+M4: Complex Multi-App Workflows & Recovery    UPCOMING         0%
+M5: System Optimization & Final Testing       PLANNED          0%
 ```
 
 ---
@@ -337,10 +340,13 @@ Project Elyra follows a milestone-driven development roadmap:
    - Full-duplex real-time audio and vision pipeline with hardware control and SQLite memory.
 2. **Milestone 2: Physical Layer Web Orchestration** *(Completed)*
    - Multi-tab browser controller, Tab ID routing, dynamic DOM tagging, input dispatching, and loop prevention.
-3. **Milestone 3: Advanced Background Task Automation** *(Active Focus)*
-   - Headless background APIs for silent email composition and delivery.
-   - Background calendar scheduling and event monitoring without GUI overhead.
-   - Silent background web data extraction pipelines.
-4. **Milestone 4: Semantic Vector Memory & Workflow Orchestration** *(Planned)*
-   - Vector embedding retrieval (e.g., SQLite-vss or ChromaDB) for semantic recall across conversation history.
-   - Multi-step cross-application automation (e.g., video editing pipelines, terminal tasks in WSL/Kali, automated workspace organization).
+3. **Milestone 3: Advanced Background Task Automation** *(Completed)*
+   - Headless background email dispatch via Nodemailer SMTP.
+   - Background SQLite calendar scheduling and Windows notification reminder daemon.
+   - Headless web search, weather, URL scraping, and crypto data extraction.
+   - Local n8n Webhook Bridge (`trigger_n8n_workflow`) for enterprise SaaS automation.
+4. **Milestone 4: Complex Workflow & Self-Healing Automation** *(Upcoming Focus)*
+   - Chaining cross-application multi-step flows and dynamic error recovery.
+   - WSL / Kali Linux terminal task automation.
+5. **Milestone 5: System Optimization & Final Testing** *(Planned)*
+   - Bandwidth optimization, security sandboxing, and final presentation edge-case hardening.
