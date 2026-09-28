@@ -137,6 +137,12 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   n8nCheckHealth() {
     return ipcRenderer.invoke('n8n:checkHealth')
   },
+  browserDismissOverlays(tabId?: number | string) {
+    return ipcRenderer.invoke('browser:dismissOverlays', tabId)
+  },
+  conductDeepResearch(payload: { topic: string; focusQuery?: string; maxSources?: number }) {
+    return ipcRenderer.invoke('research:conductDeepResearch', payload)
+  },
   windowMinimize() {
     ipcRenderer.send('window:minimize')
   },

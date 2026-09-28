@@ -8,7 +8,9 @@ import {
   Cpu, 
   ArrowRight,
   Check,
-  ShieldCheck
+  ShieldCheck,
+  RefreshCw,
+  Sparkles
 } from 'lucide-react';
 import { ElyraOrb } from '../elyra/ElyraOrb';
 import type { AutomatedTask } from '../../types/chat';
@@ -24,7 +26,7 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
   onPauseResume,
   onRerun,
 }) => {
-  const completedCount = task.steps.filter(s => s.status === 'completed').length;
+  const completedCount = task.steps.filter(s => s.status === 'completed' || s.status === 'healed').length;
   const totalCount = task.steps.length;
   const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
@@ -122,6 +124,8 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
           <div className="space-y-3">
             {task.steps.map((step, idx) => {
               const isCompleted = step.status === 'completed';
+              const isHealed = step.status === 'healed';
+              const isHealing = step.status === 'healing';
               const isInProgress = step.status === 'in_progress';
 
               return (
@@ -130,7 +134,9 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
                   className={`p-4 rounded-2xl border transition-all duration-200 flex items-start gap-4 ${
                     isInProgress
                       ? 'bg-purple-950/25 border-purple-500/40 shadow-[0_0_25px_rgba(139,92,246,0.15)] ring-1 ring-purple-500/20'
-                      : isCompleted
+                      : isHealing
+                      ? 'bg-amber-950/25 border-amber-500/40 shadow-[0_0_25px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/20'
+                      : (isCompleted || isHealed)
                       ? 'bg-[#121626]/60 border-emerald-500/20'
                       : 'bg-[#101424]/40 border-slate-800/80 opacity-60'
                   }`}
@@ -140,6 +146,14 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
                     {isCompleted ? (
                       <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
                         <Check className="w-4 h-4" />
+                      </div>
+                    ) : isHealed ? (
+                      <div className="w-7 h-7 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-300" title="Self-Healed">
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                      </div>
+                    ) : isHealing ? (
+                      <div className="w-7 h-7 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-300 animate-spin">
+                        <RefreshCw className="w-3.5 h-3.5 text-amber-300" />
                       </div>
                     ) : isInProgress ? (
                       <div className="w-7 h-7 flex items-center justify-center">
@@ -155,17 +169,33 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
                   {/* Step Description */}
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center justify-between">
-                      <h4
-                        className={`text-xs font-semibold ${
-                          isInProgress
-                            ? 'text-purple-200'
-                            : isCompleted
-                            ? 'text-slate-200'
-                            : 'text-slate-400'
-                        }`}
-                      >
-                        Sub-problem {idx + 1}: {step.title}
-                      </h4>
+                      <div className="flex items-center gap-2">
+                        <h4
+                          className={`text-xs font-semibold ${
+                            isInProgress
+                              ? 'text-purple-200'
+                              : isHealing
+                              ? 'text-amber-200'
+                              : (isCompleted || isHealed)
+                              ? 'text-slate-200'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          Sub-problem {idx + 1}: {step.title}
+                        </h4>
+                        {isHealed && (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[9px] font-medium">
+                            <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                            <span>Self-Healed</span>
+                          </span>
+                        )}
+                        {isHealing && (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[9px] font-medium animate-pulse">
+                            <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                            <span>Healing...</span>
+                          </span>
+                        )}
+                      </div>
 
                       {step.timestamp && (
                         <span className="text-[10px] text-slate-500 font-mono">
@@ -201,6 +231,17 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({
                         </span>
                         <span className="text-emerald-200/90 truncate">
                           {step.verificationResult || step.verificationMethod}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Step Self-Healing Recovery Note */}
+                    {step.recoveryNote && (
+                      <div className="mt-2 flex items-center gap-2 text-[11px] font-mono px-2.5 py-1.5 rounded-lg bg-amber-950/30 border border-amber-500/25 text-amber-300">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span className="font-semibold text-amber-400">Recovery Diagnostic:</span>
+                        <span className="text-amber-200/90 truncate">
+                          {step.recoveryNote}
                         </span>
                       </div>
                     )}

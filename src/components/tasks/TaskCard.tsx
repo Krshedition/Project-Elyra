@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, CheckCircle2, Loader2, PauseCircle, XCircle } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Loader2, PauseCircle, XCircle, RefreshCw, Sparkles } from 'lucide-react';
 import type { AutomatedTask } from '../../types/chat';
 
 interface TaskCardProps {
@@ -13,12 +13,20 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   isSelected,
   onSelect,
 }) => {
-  const completedSteps = task.steps.filter(s => s.status === 'completed').length;
+  const completedSteps = task.steps.filter(s => s.status === 'completed' || s.status === 'healed').length;
   const totalSteps = task.steps.length;
   const progressPct = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+  const hasSelfHealed = task.steps.some(s => s.selfHealed);
 
   const getStatusBadge = () => {
     switch (task.status) {
+      case 'healing':
+        return (
+          <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-semibold animate-pulse">
+            <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+            <span>Self-Healing</span>
+          </span>
+        );
       case 'in_progress':
         return (
           <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 text-[10px] font-semibold">
@@ -67,7 +75,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     >
       {/* Header: Title & Status */}
       <div className="flex items-start justify-between gap-2 mb-2">
-        <h4 className="text-xs font-semibold text-slate-100 line-clamp-1">{task.title}</h4>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <h4 className="text-xs font-semibold text-slate-100 line-clamp-1">{task.title}</h4>
+          {hasSelfHealed && (
+            <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[9px] font-medium" title="Encountered and recovered from website error">
+              <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+              <span>Healed</span>
+            </span>
+          )}
+        </div>
         {getStatusBadge()}
       </div>
 

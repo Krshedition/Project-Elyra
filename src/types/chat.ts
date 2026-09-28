@@ -53,11 +53,13 @@ export interface WorkflowSubStep {
   stepNumber: number;
   title: string;
   subProblem: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'healing' | 'healed';
   actionName?: string;
   actionDetails?: string;
   verificationMethod?: string;
   verificationResult?: string;
+  recoveryNote?: string;
+  selfHealed?: boolean;
   timestamp?: string;
   durationMs?: number;
 }
@@ -69,7 +71,7 @@ export interface AutomatedTask {
   category: 'cross_app' | 'browser' | 'email' | 'system';
   sourceApp?: string; // e.g. "ChatGPT"
   targetApp?: string; // e.g. "WhatsApp (Yash)"
-  status: 'planning' | 'in_progress' | 'completed' | 'failed' | 'paused';
+  status: 'planning' | 'in_progress' | 'completed' | 'failed' | 'paused' | 'healing';
   currentStepIndex: number;
   steps: WorkflowSubStep[];
   startedAt: string;

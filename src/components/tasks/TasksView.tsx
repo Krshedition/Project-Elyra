@@ -28,7 +28,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const allTasks = tasks;
 
   const filteredTasks = allTasks.filter(t => {
-    if (filter === 'active') return t.status === 'in_progress' || t.status === 'planning';
+    if (filter === 'active') return t.status === 'in_progress' || t.status === 'planning' || t.status === 'healing';
     if (filter === 'completed') return t.status === 'completed';
     return true;
   });
@@ -36,6 +36,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const activeTask = allTasks.find(t => t.id === selectedTaskId) || allTasks[0];
 
   const presets = [
+    {
+      title: 'Autonomous Research ➔ Briefing Dossier',
+      desc: 'Conducts multi-source investigation, scraping, and fact synthesis with citations',
+    },
     {
       title: 'ChatGPT ➔ WhatsApp (Yash)',
       desc: 'Copies latest ChatGPT answer and sends it to Yash on WhatsApp',
@@ -62,7 +66,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
               <h2 className="text-xs font-bold text-white tracking-wider uppercase">Task Progress</h2>
             </div>
             <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-semibold">
-              {allTasks.filter(t => t.status === 'in_progress').length} active
+              {allTasks.filter(t => t.status === 'in_progress' || t.status === 'healing').length} active
             </span>
           </div>
 

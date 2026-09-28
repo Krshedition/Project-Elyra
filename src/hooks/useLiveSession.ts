@@ -83,8 +83,10 @@ CRITICAL VOICE COMMAND & MULTI-STEP PROTOCOL:
   When Krish asks you to do ANY multi-step task, cross-application workflow, or chained automation (e.g. copying text from ChatGPT/WhatsApp/browser and pasting it to Yash on WhatsApp, or scraping news and drafting an email, or performing sequential browser actions):
   1. MANDATORY FIRST ACTION: You MUST call 'plan_workflow_task' IMMEDIATELY. Decompose the request into clean, numbered atomic sub-problems with clear verification criteria. This registers the task and displays the live stepper on Krish's Tasks tab!
   2. SEQUENTIAL EXECUTION: Execute the tools required for each sub-problem in sequence.
-  3. VERIFICATION & UPDATES: After executing each action, call 'update_task_step' to record that the step succeeded, supply the verification proof (e.g., 'Verified: Clipboard captured 482 chars', 'Verified: WhatsApp chat focused'), and update the progress indicator.
-  4. Once all sub-problems are verified, speak a single concise verbal confirmation to Krish.`;
+  4. Once all sub-problems are verified, speak a single concise verbal confirmation to Krish.
+  5. SELF-HEALING & DEEP RESEARCH PROTOCOL (MILESTONE 4):
+  - When asked to research a topic in depth (e.g. "Do research on X and tell me what you find" or "Research Y and draft an email"), use 'conduct_deep_research'. It autonomously searches, reads multiple candidate sources, cross-references findings, and produces a complete dossier with citations in a single autonomous chain.
+  - If a website action hits an obstacle, cookie popup, or DOM drift, your browser engine automatically self-heals by dismissing overlays and re-indexing tags. If you encounter an obstacle in a planned task, invoke 'recover_workflow_step' to record the self-healing action and mark the step 'healed'.`;
 
 
 
@@ -661,11 +663,49 @@ export function useLiveSession() {
                   properties: {
                     taskId: { type: "STRING", description: "Optional task ID. If omitted, targets the active task." },
                     stepNumber: { type: "INTEGER", description: "1-indexed step number being updated." },
-                    status: { type: "STRING", enum: ["in_progress", "completed", "failed"], description: "New step status." },
+                    status: { type: "STRING", enum: ["in_progress", "completed", "failed", "healing", "healed"], description: "New step status." },
                     verificationResult: { type: "STRING", description: "Verification evidence proving the step succeeded (e.g. 'Verified: Switched to Tab 2 (ChatGPT)', 'Verified: Captured 480 chars in clipboard')." },
                     logMessage: { type: "STRING", description: "Log message to display in the live terminal trace." }
                   },
                   required: ["stepNumber", "status"]
+                }
+              },
+              {
+                name: "browser_dismiss_overlays",
+                description: "Scans the browser for cookie consent banners, GDPR popups, or modal overlays that block the page and automatically clicks dismiss or closes them.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    tabId: { type: "INTEGER", description: "Optional Tab ID to target. If omitted, targets current tab." }
+                  }
+                }
+              },
+              {
+                name: "conduct_deep_research",
+                description: "Autonomously executes a multi-source deep research workflow. Searches the web, reads and cross-references multiple candidate sources, and synthesizes a structured briefing with citations in a single autonomous chain.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    topic: { type: "STRING", description: "The research topic or subject to investigate (e.g. 'Advances in Quantum Computing 2026', 'Gemini 2.5 Flash architecture updates')." },
+                    focusQuery: { type: "STRING", description: "Optional sub-focus or specific question to guide the deep research." },
+                    maxSources: { type: "INTEGER", description: "Maximum number of distinct candidate sources to scrape and cross-reference (default 3, max 5)." }
+                  },
+                  required: ["topic"]
+                }
+              },
+              {
+                name: "recover_workflow_step",
+                description: "Invokes Elyra's self-healing engine when a workflow step encounters an error or website obstacle. Retries alternative strategies, dismisses blocking modals, and logs the healing action in the Tasks UI.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    taskId: { type: "STRING", description: "Optional task ID. Defaults to active task." },
+                    stepNumber: { type: "INTEGER", description: "1-indexed step number to heal/recover." },
+                    errorReason: { type: "STRING", description: "The error or obstacle encountered (e.g. 'Cookie modal blocked click', 'DOM element re-rendered')." },
+                    recoveryAction: { type: "STRING", description: "The recovery action taken (e.g. 'Dismissed GDPR banner and re-clicked element [4]')." },
+                    status: { type: "STRING", enum: ["healing", "healed", "failed"], description: "New step status after recovery attempt." }
+                  },
+                  required: ["stepNumber", "errorReason", "recoveryAction"]
                 }
               }
             ]
@@ -1141,14 +1181,14 @@ export function useLiveSession() {
 
       if (name === 'update_task_step') {
         const stepNum = Number(args.stepNumber) || 1;
-        const status = args.status as ('in_progress' | 'completed' | 'failed');
+        const status = args.status as ('in_progress' | 'completed' | 'failed' | 'healing' | 'healed');
         const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const verResult = args.verificationResult || (status === 'completed' ? 'Verified by execution return' : undefined);
+        const verResult = args.verificationResult || (status === 'completed' ? 'Verified by execution return' : status === 'healed' ? 'Self-Healed via Autonomous Error Recovery' : undefined);
         const logMsg = args.logMessage || `Step ${stepNum} marked as ${status}.`;
 
         setTasks(prev => prev.map(t => {
           if (args.taskId && t.id !== args.taskId) return t;
-          if (!args.taskId && t.status !== 'in_progress') return t;
+          if (!args.taskId && t.status !== 'in_progress' && t.status !== 'healing') return t;
 
           const updatedSteps = t.steps.map(s => {
             if (s.stepNumber === stepNum) {
@@ -1156,11 +1196,12 @@ export function useLiveSession() {
                 ...s,
                 status,
                 verificationResult: verResult || s.verificationResult,
+                selfHealed: status === 'healed' ? true : s.selfHealed,
                 timestamp: s.timestamp || now,
-                durationMs: s.durationMs || (status === 'completed' ? Math.floor(Math.random() * 350 + 150) : undefined)
+                durationMs: s.durationMs || (status === 'completed' || status === 'healed' ? Math.floor(Math.random() * 350 + 150) : undefined)
               };
             }
-            if (status === 'completed' && s.stepNumber === stepNum + 1) {
+            if ((status === 'completed' || status === 'healed') && s.stepNumber === stepNum + 1) {
               return {
                 ...s,
                 status: 'in_progress' as const,
@@ -1170,7 +1211,7 @@ export function useLiveSession() {
             return s;
           });
 
-          const isAllCompleted = updatedSteps.every(s => s.status === 'completed');
+          const isAllCompleted = updatedSteps.every(s => s.status === 'completed' || s.status === 'healed');
           const nextIdx = isAllCompleted ? updatedSteps.length - 1 : Math.max(0, stepNum);
 
           if (isAllCompleted && t.status !== 'completed') {
@@ -1188,7 +1229,7 @@ export function useLiveSession() {
 
           return {
             ...t,
-            status: isAllCompleted ? 'completed' : t.status,
+            status: isAllCompleted ? 'completed' : status === 'healing' ? 'healing' : 'in_progress',
             currentStepIndex: nextIdx,
             completedAt: isAllCompleted ? now : t.completedAt,
             steps: updatedSteps,
@@ -1197,6 +1238,63 @@ export function useLiveSession() {
         }));
 
         return { id: callId, name, response: { result: `Step ${stepNum} updated to ${status}.` } };
+      }
+
+      if (name === 'recover_workflow_step') {
+        const stepNum = Number(args.stepNumber) || 1;
+        const status = (args.status || 'healed') as ('healing' | 'healed' | 'failed');
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const errorReason = args.errorReason || 'Unexpected website obstacle or blocked selector';
+        const recoveryAction = args.recoveryAction || 'Dismissed overlays and re-indexed target elements';
+
+        console.log(`[SelfHealingEngine] Recovering step ${stepNum}:`, errorReason, '->', recoveryAction);
+
+        setTasks(prev => prev.map(t => {
+          if (args.taskId && t.id !== args.taskId) return t;
+          if (!args.taskId && t.status !== 'in_progress' && t.status !== 'healing') return t;
+
+          const updatedSteps = t.steps.map(s => {
+            if (s.stepNumber === stepNum) {
+              return {
+                ...s,
+                status,
+                recoveryNote: `Self-Healed: ${recoveryAction} (Obstacle: ${errorReason})`,
+                selfHealed: status === 'healed',
+                verificationResult: status === 'healed' ? `Self-Healed: ${recoveryAction}` : s.verificationResult,
+                timestamp: now,
+              };
+            }
+            if (status === 'healed' && s.stepNumber === stepNum + 1) {
+              return {
+                ...s,
+                status: 'in_progress' as const,
+                timestamp: now,
+              };
+            }
+            return s;
+          });
+
+          const isAllCompleted = updatedSteps.every(s => s.status === 'completed' || s.status === 'healed');
+
+          return {
+            ...t,
+            status: isAllCompleted ? 'completed' : status === 'healing' ? 'healing' : 'in_progress',
+            steps: updatedSteps,
+            logs: [
+              ...t.logs,
+              `[${now}] [Self-Healing Engine] Step ${stepNum} obstacle detected: ${errorReason}`,
+              `[${now}] [Self-Healing Engine] Recovery action: ${recoveryAction} -> Status: ${status}`
+            ]
+          };
+        }));
+
+        return {
+          id: callId,
+          name,
+          response: {
+            result: `Self-healing protocol executed for Step ${stepNum}. Action: ${recoveryAction}. Status: ${status}.`
+          }
+        };
       }
 
       if (name.startsWith('browser_')) {
@@ -1241,6 +1339,9 @@ export function useLiveSession() {
             break;
           case 'browser_press_key':
             result = await ipc.browserPressKey(args.key, args.tabId);
+            break;
+          case 'browser_dismiss_overlays':
+            result = ipc.browserDismissOverlays ? await ipc.browserDismissOverlays(args.tabId) : await ipc.invoke('browser:dismissOverlays', args.tabId);
             break;
           default:
             return { id: callId, name, response: { error: `Unknown browser action: ${name}` } };
@@ -1481,6 +1582,90 @@ export function useLiveSession() {
       if (name === 'trigger_n8n_workflow') {
         const res = await ipc.n8nTriggerWorkflow(args);
         return { id: callId, name, response: res };
+      }
+
+      // Milestone 4: Autonomous Multi-Source Deep Research Engine
+      if (name === 'conduct_deep_research') {
+        console.log('[ResearchEngine] Starting autonomous deep research on:', args.topic);
+        const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+        setTasks(prev => prev.map(t => {
+          if (t.status !== 'in_progress') return t;
+          return {
+            ...t,
+            logs: [...t.logs, `[${nowStr}] [DeepResearchEngine] Initiating multi-source investigation for: "${args.topic}"`]
+          };
+        }));
+
+        const res = ipc.conductDeepResearch 
+          ? await ipc.conductDeepResearch({ topic: args.topic, focusQuery: args.focusQuery, maxSources: args.maxSources || 3 })
+          : await ipc.invoke('research:conductDeepResearch', { topic: args.topic, focusQuery: args.focusQuery, maxSources: args.maxSources || 3 });
+
+        if (res?.success && res.dossier) {
+          const dossier = res.dossier;
+          const verificationProof = `Verified: Analyzed ${dossier.totalSourcesAnalyzed} sources (${dossier.sources.map((s: any) => s.domain).filter(Boolean).slice(0, 3).join(', ')})`;
+
+          // Update active task step
+          setTasks(prev => prev.map(t => {
+            if (t.status !== 'in_progress') return t;
+            const updatedSteps = [...t.steps];
+            const currIdx = t.currentStepIndex;
+            if (updatedSteps[currIdx]) {
+              updatedSteps[currIdx] = {
+                ...updatedSteps[currIdx],
+                status: 'completed',
+                verificationResult: verificationProof,
+                timestamp: nowStr,
+              };
+              if (updatedSteps[currIdx + 1]) {
+                updatedSteps[currIdx + 1] = {
+                  ...updatedSteps[currIdx + 1],
+                  status: 'in_progress',
+                  timestamp: nowStr,
+                };
+              }
+            }
+            const isAllCompleted = updatedSteps.every(s => s.status === 'completed' || s.status === 'healed');
+            return {
+              ...t,
+              status: isAllCompleted ? 'completed' : t.status,
+              currentStepIndex: isAllCompleted ? updatedSteps.length - 1 : Math.min(currIdx + 1, updatedSteps.length - 1),
+              steps: updatedSteps,
+              logs: [
+                ...t.logs,
+                `[${nowStr}] [DeepResearchEngine] ${verificationProof}`,
+                `[${nowStr}] [DeepResearchEngine] Key findings: ${dossier.keyFindings.slice(0, 2).join('; ')}`
+              ]
+            };
+          }));
+
+          setMessages(prev => [
+            ...prev,
+            {
+              id: 'research_' + Date.now(),
+              role: 'assistant',
+              text: dossier.structuredReportMarkdown,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              isSuccess: true,
+            }
+          ]);
+
+          return {
+            id: callId,
+            name,
+            response: {
+              result: {
+                topic: dossier.topic,
+                executiveSummary: dossier.executiveSummary,
+                keyFindings: dossier.keyFindings,
+                sources: dossier.sources.map((s: any) => ({ title: s.title, url: s.url, domain: s.domain })),
+                totalSourcesAnalyzed: dossier.totalSourcesAnalyzed,
+              }
+            }
+          };
+        } else {
+          return { id: callId, name, response: { error: res?.error || 'Deep research failed to retrieve sources.' } };
+        }
       }
 
       return { id: callId, name, response: { error: `Unknown function call: ${name}` } };

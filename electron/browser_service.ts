@@ -12,6 +12,7 @@ export class DirectBrowserEngine {
   private pageToIdMap: WeakMap<Page, number> = new WeakMap();
   private nextTabId: number = 1;
   private currentTabId: number = 1;
+  private elementMemory: Map<number, any[]> = new Map();
 
   private constructor() {}
 
@@ -261,6 +262,77 @@ export class DirectBrowserEngine {
     }
   }
 
+  /**
+   * Self-Healing Overlay Dismissal:
+   * Scans for and automatically dismisses cookie consent dialogs, GDPR banners,
+   * modal backdrops, and newsletter popups that intercept pointer events.
+   */
+  public async dismissOverlays(tabId?: number | string): Promise<{ dismissed: boolean; detail?: string }> {
+    try {
+      const { page } = await this.resolvePage(tabId);
+      
+      const dismissSelectors = [
+        '#onetrust-accept-btn-handler',
+        '#cookie-accept',
+        '.cc-accept',
+        '.cc-dismiss',
+        '#sp-cc-accept',
+        'button#didomi-notice-agree-button',
+        'button:has-text("Accept all")',
+        'button:has-text("Accept All")',
+        'button:has-text("Accept cookies")',
+        'button:has-text("Allow all cookies")',
+        'button:has-text("Allow all")',
+        'button:has-text("I agree")',
+        'button:has-text("I accept")',
+        'button:has-text("Got it")',
+        'button:has-text("Accept")',
+        'button:has-text("Agree")',
+        'button[aria-label="Close" i]',
+        'button[aria-label="Dismiss" i]',
+        'button[aria-label*="close" i]',
+        '[data-testid*="close" i]',
+        '.modal-close',
+        '.close-modal',
+        'button.close',
+        '[aria-modal="true"] button:has-text("Close")',
+        '[aria-modal="true"] button:has-text("✕")',
+        '[aria-modal="true"] button:has-text("×")',
+        'div[role="dialog"] button:has-text("Close")',
+        'div[role="dialog"] button[aria-label*="close" i]'
+      ];
+
+      for (const sel of dismissSelectors) {
+        try {
+          const loc = page.locator(sel).first();
+          if (await loc.count() > 0 && await loc.isVisible()) {
+            await loc.click({ force: true, timeout: 2000 });
+            await page.waitForTimeout(300);
+            return { dismissed: true, detail: `Dismissed overlay via selector: ${sel}` };
+          }
+        } catch {
+          // ignore individual selector check
+        }
+      }
+
+      // Check if a modal backdrop is active and press Escape
+      const hasBackdrop = await page.evaluate(() => {
+        const dialog = document.querySelector('dialog[open], [aria-modal="true"], .modal.show, [class*="backdrop"]');
+        return !!dialog;
+      }).catch(() => false);
+
+      if (hasBackdrop) {
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(200);
+        return { dismissed: true, detail: 'Dismissed active modal dialog via Escape key.' };
+      }
+
+      return { dismissed: false };
+    } catch (err: any) {
+      return { dismissed: false, detail: err.message };
+    }
+  }
+
   public async navigate(url: string, newTab: boolean = false, tabId?: number | string): Promise<string> {
     try {
       let finalUrl = url;
@@ -268,10 +340,27 @@ export class DirectBrowserEngine {
         finalUrl = `https://${finalUrl}`;
       }
 
+      const gotoWithRecovery = async (p: Page, u: string) => {
+        try {
+          await p.goto(u, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        } catch (navErr: any) {
+          if (navErr.message.includes('timeout') || navErr.message.includes('Timeout')) {
+            console.log('[Self-Healing] Navigation timed out, retrying with commit strategy...');
+            await p.goto(u, { waitUntil: 'commit', timeout: 15000 });
+          } else {
+            throw navErr;
+          }
+        }
+        // Non-blocking proactive overlay dismissal check after navigation
+        setTimeout(() => {
+          this.dismissOverlays().catch(() => {});
+        }, 1000);
+      };
+
       if (newTab) {
         const context = await this.ensureContext();
         const page = await context.newPage();
-        await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await gotoWithRecovery(page, finalUrl);
         await page.bringToFront();
         await this.syncTabs();
         const id = this.pageToIdMap.get(page) || this.currentTabId;
@@ -285,7 +374,7 @@ export class DirectBrowserEngine {
       // If user specified tabId, target that tab
       if (tabId !== undefined && tabId !== null && String(tabId).trim() !== '') {
         const { id, page } = await this.resolvePage(tabId);
-        await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await gotoWithRecovery(page, finalUrl);
         await page.bringToFront();
         let title = 'Tab';
         try { title = await page.title(); } catch (e) {}
@@ -306,7 +395,7 @@ export class DirectBrowserEngine {
       }
 
       const { id, page } = await this.resolvePage();
-      await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await gotoWithRecovery(page, finalUrl);
       await page.bringToFront();
       let title = 'Tab';
       try { title = await page.title(); } catch (e) {}
@@ -399,20 +488,54 @@ export class DirectBrowserEngine {
   public async clickByText(text: string, tabId?: number | string): Promise<string> {
     try {
       const { id, page } = await this.resolvePage(tabId);
-      const loc = page.locator(`text="${text}"`).first();
-      const count = await loc.count();
+      let selfHealedNote = '';
+      
+      let loc = page.locator(`text="${text}"`).first();
+      let count = await loc.count();
+
       if (count === 0) {
         const ariaLoc = page.locator(`[aria-label*="${text}" i]`).first();
-        if (await ariaLoc.count() === 0) {
-          return `Element with text or aria-label "${text}" not found on Tab [Tab ID: ${id}].`;
+        if (await ariaLoc.count() > 0) {
+          loc = ariaLoc;
+          count = 1;
+        } else {
+          const btnLoc = page.getByRole('button', { name: text }).first();
+          if (await btnLoc.count() > 0) {
+            loc = btnLoc;
+            count = 1;
+          }
         }
-        await ariaLoc.scrollIntoViewIfNeeded();
-        await ariaLoc.click({ force: true, timeout: 5000 });
-      } else {
-        await loc.scrollIntoViewIfNeeded();
-        await loc.click({ force: true, timeout: 5000 });
       }
-      return `Clicked on element containing "${text}" on Tab [Tab ID: ${id}].`;
+
+      // If not found, check if an overlay modal is obscuring the viewport
+      if (count === 0) {
+        const overlayRes = await this.dismissOverlays(id);
+        if (overlayRes.dismissed) {
+          selfHealedNote = `[Self-Healed via Overlay Dismissal] ${overlayRes.detail}. `;
+          loc = page.locator(`text="${text}"`).first();
+          count = await loc.count();
+        }
+      }
+
+      if (count === 0) {
+        return `Element with text or aria-label "${text}" not found on Tab [Tab ID: ${id}].`;
+      }
+
+      try {
+        await loc.scrollIntoViewIfNeeded();
+        await loc.click({ force: true, timeout: 4000 });
+      } catch (clickErr: any) {
+        const overlayRes = await this.dismissOverlays(id);
+        if (overlayRes.dismissed) {
+          selfHealedNote += `[Self-Healed via Overlay Dismissal] ${overlayRes.detail}. `;
+          await loc.click({ force: true, timeout: 4000 });
+        } else {
+          await loc.evaluate((el: HTMLElement) => el.click());
+          selfHealedNote += `[Self-Healed via Synthetic DOM Click] `;
+        }
+      }
+
+      return `${selfHealedNote}Clicked on element containing "${text}" on Tab [Tab ID: ${id}].`;
     } catch (err: any) {
       return `Failed to click on Tab [Tab ID: ${tabId || this.currentTabId}]: ${err.message}`;
     }
@@ -421,7 +544,9 @@ export class DirectBrowserEngine {
   public async typeInput(selector: string | undefined, text: string, pressEnter: boolean, tabId?: number | string): Promise<string> {
     try {
       const { id, page } = await this.resolvePage(tabId);
+      let selfHealedNote = '';
       let targetLocator;
+
       if (selector) {
         targetLocator = page.locator(selector).first();
       } else {
@@ -429,15 +554,47 @@ export class DirectBrowserEngine {
       }
 
       if (await targetLocator.count() === 0) {
+        const overlayRes = await this.dismissOverlays(id);
+        if (overlayRes.dismissed) {
+          selfHealedNote = `[Self-Healed via Overlay Dismissal] `;
+          if (selector) {
+            targetLocator = page.locator(selector).first();
+          } else {
+            targetLocator = page.locator('input:visible, textarea:visible, [contenteditable="true"]:visible, [role="textbox"]:visible').first();
+          }
+        }
+      }
+
+      if (await targetLocator.count() === 0) {
         return `No visible input field found on Tab [Tab ID: ${id}] ${selector ? `with selector "${selector}"` : ''}.`;
       }
 
       await targetLocator.scrollIntoViewIfNeeded();
-      await targetLocator.fill(text);
-      if (pressEnter) {
-        await targetLocator.press('Enter');
+
+      // Handle contenteditable / rich-text editors (e.g. WhatsApp, ChatGPT, Notion)
+      const isContentEditable = await targetLocator.evaluate((el: HTMLElement) => {
+        return el.isContentEditable || el.getAttribute('contenteditable') === 'true' || el.getAttribute('role') === 'textbox';
+      }).catch(() => false);
+
+      if (isContentEditable) {
+        await targetLocator.click({ force: true });
+        await page.keyboard.insertText(text);
+        selfHealedNote += `[RichText Handled] `;
+      } else {
+        try {
+          await targetLocator.fill(text);
+        } catch {
+          await targetLocator.click({ force: true });
+          await page.keyboard.insertText(text);
+          selfHealedNote += `[Self-Healed via Keyboard Insert] `;
+        }
       }
-      return `Typed "${text}" into input on Tab [Tab ID: ${id}] ${pressEnter ? 'and pressed Enter' : ''}`;
+
+      if (pressEnter) {
+        await page.keyboard.press('Enter');
+      }
+
+      return `${selfHealedNote}Typed "${text}" into input on Tab [Tab ID: ${id}] ${pressEnter ? 'and pressed Enter' : ''}`;
     } catch (err: any) {
       return `Failed to type input on Tab [Tab ID: ${tabId || this.currentTabId}]: ${err.message}`;
     }
@@ -541,6 +698,9 @@ export class DirectBrowserEngine {
         return results;
       });
       
+      // Store in element memory for self-healing recoveries
+      this.elementMemory.set(id, elementsMap);
+
       if (elementsMap.length === 0) return `No visible interactive elements found on Tab [Tab ID: ${id}].`;
       
       const chunks = elementsMap.map((e: any) => {
@@ -561,13 +721,63 @@ export class DirectBrowserEngine {
   public async clickElement(id: number, tabId?: number | string): Promise<string> {
     try {
       const { id: tid, page } = await this.resolvePage(tabId);
-      const loc = page.locator(`[data-elyra-id="${id}"]`);
+      let loc = page.locator(`[data-elyra-id="${id}"]`);
+      let selfHealedNote = '';
+
+      // TIER 1: If element with data-elyra-id is missing, attempt self-healing recovery
       if (await loc.count() === 0) {
-        return `Element with ID [${id}] not found on Tab [Tab ID: ${tid}]. Did you run browser_analyze_page first?`;
+        const tabMemory = this.elementMemory.get(tid) || [];
+        const remembered = tabMemory.find((m: any) => m.id === id);
+
+        // Attempt heuristic recovery using remembered element text / placeholder
+        if (remembered) {
+          if (remembered.text && remembered.text.length > 2) {
+            const textLoc = page.locator(`text="${remembered.text}"`).first();
+            if (await textLoc.count() > 0) {
+              loc = textLoc;
+              selfHealedNote = `[Self-Healed via Text Matching] Element [${id}] re-acquired by text "${remembered.text}". `;
+            }
+          } else if (remembered.placeholder) {
+            const phLoc = page.locator(`[placeholder*="${remembered.placeholder}" i]`).first();
+            if (await phLoc.count() > 0) {
+              loc = phLoc;
+              selfHealedNote = `[Self-Healed via Placeholder] Element [${id}] re-acquired by placeholder "${remembered.placeholder}". `;
+            }
+          }
+        }
+
+        // If still not found, silently re-tag the page to recover from dynamic SPA re-render
+        if (await loc.count() === 0) {
+          await this.analyzePage(tid);
+          loc = page.locator(`[data-elyra-id="${id}"]`);
+          if (await loc.count() > 0) {
+            selfHealedNote = `[Self-Healed via DOM Re-Index] Element [${id}] re-indexed after dynamic page re-render. `;
+          }
+        }
+
+        if (await loc.count() === 0) {
+          return `Element with ID [${id}] not found on Tab [Tab ID: ${tid}]. Did you run browser_analyze_page first?`;
+        }
       }
-      await loc.scrollIntoViewIfNeeded();
-      await loc.click({ force: true, timeout: 5000 });
-      return `Clicked element [${id}] on Tab [Tab ID: ${tid}].`;
+
+      // TIER 2: Attempt standard click, with overlay dismissal retry on failure
+      try {
+        await loc.scrollIntoViewIfNeeded();
+        await loc.click({ force: true, timeout: 4000 });
+      } catch (clickErr: any) {
+        const overlayRes = await this.dismissOverlays(tid);
+        if (overlayRes.dismissed) {
+          selfHealedNote += `[Self-Healed via Overlay Dismissal] ${overlayRes.detail}. `;
+          await loc.scrollIntoViewIfNeeded();
+          await loc.click({ force: true, timeout: 4000 });
+        } else {
+          // Fall back to synthetic JavaScript DOM dispatch click
+          await loc.evaluate((el: HTMLElement) => el.click());
+          selfHealedNote += `[Self-Healed via Synthetic DOM Click] Executed direct DOM event click. `;
+        }
+      }
+
+      return `${selfHealedNote}Clicked element [${id}] on Tab [Tab ID: ${tid}].`;
     } catch (err: any) {
       return `Failed to click element ${id} on Tab [Tab ID: ${tabId || this.currentTabId}]: ${err.message}`;
     }
@@ -578,14 +788,25 @@ export class DirectBrowserEngine {
       const { id: tid, page } = await this.resolvePage(tabId);
       const results = [];
       for (const field of fields) {
-        const loc = page.locator(`[data-elyra-id="${field.id}"]`);
+        let loc = page.locator(`[data-elyra-id="${field.id}"]`);
+        if (await loc.count() === 0) {
+          // Attempt overlay dismissal
+          await this.dismissOverlays(tid);
+          loc = page.locator(`[data-elyra-id="${field.id}"]`);
+        }
         if (await loc.count() === 0) {
           results.push(`[${field.id}] not found`);
           continue;
         }
         await loc.scrollIntoViewIfNeeded();
-        await loc.fill(field.text);
-        results.push(`[${field.id}] filled`);
+        try {
+          await loc.fill(field.text);
+          results.push(`[${field.id}] filled`);
+        } catch {
+          await loc.click({ force: true });
+          await page.keyboard.insertText(field.text);
+          results.push(`[${field.id}] filled (self-healed via key input)`);
+        }
       }
       return `Form filled on Tab [Tab ID: ${tid}]: ${results.join(', ')}`;
     } catch (err: any) {

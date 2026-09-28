@@ -16,12 +16,14 @@ import { EmailService } from './email_service';
 import { CalendarService } from './calendar_service';
 import { DataService } from './data_service';
 import { N8nService } from './n8n_service';
+import { ResearchService } from './research_service';
 
 const browser = DirectBrowserEngine.getInstance();
 const emailService = EmailService.getInstance();
 const calendarService = CalendarService.getInstance();
 const dataService = DataService.getInstance();
 const n8nService = N8nService.getInstance();
+const researchService = ResearchService.getInstance();
 
 process.env.APP_ROOT = path.join(__dirname, '..');
 
@@ -329,6 +331,23 @@ ipcMain.handle('n8n:triggerWorkflow', async (event, payload: { workflowName: str
 
 ipcMain.handle('n8n:checkHealth', async () => {
   return await n8nService.checkHealth();
+});
+
+// ==========================================
+// MILESTONE 4: COMPLEX WORKFLOW & SELF-HEALING
+// ==========================================
+
+// 1. Browser Self-Healing Overlay Dismissal
+ipcMain.handle('browser:dismissOverlays', async (event, tabId?: number | string) => {
+  return await browser.dismissOverlays(tabId);
+});
+
+// 2. Autonomous Multi-Source Deep Research Engine
+ipcMain.handle('research:conductDeepResearch', async (event, payload: { topic: string; focusQuery?: string; maxSources?: number }) => {
+  return await researchService.conductDeepResearch(payload.topic, {
+    focusQuery: payload.focusQuery,
+    maxSources: payload.maxSources,
+  });
 });
 
 const gotTheLock = app.requestSingleInstanceLock();

@@ -250,10 +250,18 @@ Located across `electron/validator.ts`, `electron/main.ts`, and `src/hooks/useLi
 * **Autonomous Loop Breaker:** Safety governor tracking consecutive tool executions without fresh user speech, preventing runaway re-trigger loops.
 * **Unified Tool Dispatcher & Lean IPC:** Centralized action router in `useLiveSession.ts`, singleton browser lifecycle in `electron/main.ts`, and strict `{ valid, error }` validation signatures.
 
-### Milestone 3: Advanced Background Task Automation — NEXT PHASE (IN PROGRESS)
-* **Silent Email Delivery:** Headless API integrations allowing the AI to compose and send emails in the background without launching a browser window.
-* **Calendar Scheduling:** Background calendar event creation, meeting management, and agenda lookups.
-* **Headless Data Retrieval:** Autonomous background data fetching and information extraction pipelines operating without GUI dependencies.
+### Milestone 3: Advanced Background Task Automation — COMPLETED (100%)
+* **Silent Email Delivery:** Headless API integrations allowing the AI to compose and send emails via Google SMTP over TLS (Port 465) without launching a browser window, complete with user review/approval gates.
+* **Calendar Scheduling:** Background calendar event creation, meeting management, and agenda lookups backed by SQLite, with an active 60-second polling daemon delivering native Windows toast notifications.
+* **Headless Data Retrieval:** Autonomous background data fetching (DuckDuckGo web search, Open-Meteo weather, cheerio/readability URL extraction, CoinCap crypto prices) operating without GUI dependencies.
+* **n8n Webhook Bridge:** Local n8n workflow integration trigger for external automation dispatch.
+* **Dynamic Task Decomposition UI:** Sub-problem breakdown, status tracking, and verification proof badges displayed on the Tasks tab.
+
+### Milestone 4: Complex Workflow & Self-Healing Automation — COMPLETED (100%)
+* **Autonomous Multi-Source Deep Research Engine:** End-to-end autonomous research orchestrator (`conduct_deep_research`) performing query decomposition, multi-domain search, concurrent content extraction, fact cross-referencing, and markdown dossiers with source citations.
+* **Self-Healing Overlay & Cookie Banner Dismissal:** Heuristic detection and automatic clearing of GDPR cookie dialogs, newsletter popups, and backdrop modals that intercept pointer events.
+* **Multi-Strategy Selector Fallback & DOM Resync:** Automatic tier-based recovery for element clicks (text matching, placeholder lookup, silent DOM re-tagging), rich-text input typing (contenteditable), and dynamic client-side SPA re-render recovery.
+* **Self-Healing Task Recovery Protocol:** Dynamic recovery logging (`recover_workflow_step`) with visual status indicators (pulsing amber "Self-Healing", emerald "Self-Healed" badges) on the Tasks UI tab.
 
 ```text
 Milestone / Component                         Status         Progress
@@ -277,8 +285,12 @@ M3: Headless Calendar & Windows Reminders     COMPLETED      100%
 M3: Silent Headless Data Fetcher (Search/API) COMPLETED      100%
 M3: n8n Workflow Webhook Integration Bridge   COMPLETED      100%
 ----------------------------------------------------------------------
-M4: Complex Multi-App Workflows & Recovery    UPCOMING         0%
-M5: System Optimization & Final Testing       PLANNED          0%
+M4: Autonomous Deep Research Engine           COMPLETED      100%
+M4: Self-Healing Overlay & Cookie Dismissal   COMPLETED      100%
+M4: Multi-Strategy Selector & DOM Resync      COMPLETED      100%
+M4: Tasks UI Self-Healing & Recovery Badges   COMPLETED      100%
+----------------------------------------------------------------------
+M5: System Optimization & Final Testing       UPCOMING         0%
 ```
 
 ---
