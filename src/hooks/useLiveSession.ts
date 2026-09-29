@@ -92,6 +92,8 @@ CRITICAL VOICE COMMAND & MULTI-STEP PROTOCOL:
 
 export function useLiveSession() {
   const [state, setState] = useState<SessionState>('idle');
+  const stateRef = useRef<SessionState>('idle');
+  stateRef.current = state;
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [volume, setVolume] = useState<number>(0);
 
@@ -127,6 +129,7 @@ export function useLiveSession() {
   const wsRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<AudioRecorder | null>(null);
   const streamerRef = useRef<AudioStreamer | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
   const videoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const transcriptRef = useRef<string>('');
   const resumptionTokenRef = useRef<string | null>(null);
@@ -808,6 +811,7 @@ export function useLiveSession() {
                     }
                   } as any
                 });
+                screenStreamRef.current = stream;
 
                 const video = document.createElement('video');
                 video.srcObject = stream;
@@ -827,6 +831,9 @@ export function useLiveSession() {
                 videoIntervalRef.current = setInterval(() => {
                   if (!ctx || !diffCtx || ws.readyState !== WebSocket.OPEN) return;
 
+                  // Bandwidth Optimization: Skip capture if app is hidden or Elyra is actively speaking
+                  if (document.hidden || stateRef.current === 'speaking') return;
+
                   // Pause video frame transmission for 6 seconds after tool execution to avoid feedback loops with page loading
                   if (Date.now() - lastToolExecutionTimeRef.current < 6000) return;
 
@@ -841,11 +848,11 @@ export function useLiveSession() {
                       const rDiff = Math.abs(currentData[i] - prevData[i]);
                       const gDiff = Math.abs(currentData[i + 1] - prevData[i + 1]);
                       const bDiff = Math.abs(currentData[i + 2] - prevData[i + 2]);
-                      if (rDiff > 10 || gDiff > 10 || bDiff > 10) {
+                      if (rDiff > 12 || gDiff > 12 || bDiff > 12) {
                         diffCount++;
                       }
                     }
-                    if (diffCount / (64 * 36) > 0.03) { // 3% pixel threshold
+                    if (diffCount / (64 * 36) > 0.04) { // 4% pixel threshold (filters micro-blinks and cursor jitter)
                       isDifferent = true;
                     }
                   } else {
@@ -854,8 +861,20 @@ export function useLiveSession() {
 
                   if (isDifferent) {
                     prevData = new Uint8ClampedArray(currentData);
+
+                    // Adaptive resolution: Full 720p @ 0.75 when executing active tasks, downscale to 960x540 @ 0.60 when idle
+                    const isTaskActive = tasksRef.current.some(t => t.status === 'in_progress');
+                    const targetWidth = isTaskActive ? 1280 : 960;
+                    const targetHeight = isTaskActive ? 720 : 540;
+                    const quality = isTaskActive ? 0.75 : 0.60;
+
+                    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+                      canvas.width = targetWidth;
+                      canvas.height = targetHeight;
+                    }
+
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
                     const base64 = dataUrl.split(',')[1];
 
                     ws.send(JSON.stringify({
@@ -867,7 +886,7 @@ export function useLiveSession() {
                       }
                     }));
                   }
-                }, 4000); // Send 1 frame every 4 seconds if changed
+                }, 4000); // 1 frame every 4s if visually modified
               } catch (e) {
                 console.error("Screen capture failed:", e);
               }
@@ -1233,7 +1252,7 @@ export function useLiveSession() {
             currentStepIndex: nextIdx,
             completedAt: isAllCompleted ? now : t.completedAt,
             steps: updatedSteps,
-            logs: [...t.logs, `[${now}] ${logMsg}` + (verResult ? ` | ${verResult}` : '')]
+            logs: [...t.logs, `[${now}] ${logMsg}` + (verResult ? ` | ${verResult}` : '')].slice(-150)
           };
         }));
 
@@ -1593,7 +1612,7 @@ export function useLiveSession() {
           if (t.status !== 'in_progress') return t;
           return {
             ...t,
-            logs: [...t.logs, `[${nowStr}] [DeepResearchEngine] Initiating multi-source investigation for: "${args.topic}"`]
+            logs: [...t.logs, `[${nowStr}] [DeepResearchEngine] Initiating multi-source investigation for: "${args.topic}"`].slice(-150)
           };
         }));
 
@@ -1701,6 +1720,10 @@ export function useLiveSession() {
     if (videoIntervalRef.current) {
       clearInterval(videoIntervalRef.current);
       videoIntervalRef.current = null;
+    }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
+      screenStreamRef.current = null;
     }
     if (sessionTimeoutRef.current) {
       clearTimeout(sessionTimeoutRef.current);
@@ -1850,7 +1873,7 @@ export function useLiveSession() {
             ...t,
             currentStepIndex: nextStepIdx,
             steps: updatedSteps,
-            logs: [...t.logs, newLog]
+            logs: [...t.logs, newLog].slice(-150)
           };
         });
       });

@@ -55,12 +55,47 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false, // Preload requires access to IPC and contextBridge
     },
   });
 
   win.center();
   win.once('ready-to-show', () => {
     win?.show();
+  });
+
+  // Security Sandboxing: Block arbitrary new window creation and sanitize external links
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        shell.openExternal(url);
+      } else {
+        console.warn('[Security] Denied window open for non-http(s) protocol:', url);
+      }
+    } catch {
+      console.warn('[Security] Invalid URL passed to window open:', url);
+    }
+    return { action: 'deny' };
+  });
+
+  // Security Sandboxing: Prevent top-level navigation to unauthorized external locations
+  win.webContents.on('will-navigate', (event, navigationUrl) => {
+    if (VITE_DEV_SERVER_URL && navigationUrl.startsWith(VITE_DEV_SERVER_URL)) {
+      return;
+    }
+    try {
+      const parsed = new URL(navigationUrl);
+      if (parsed.protocol === 'file:') {
+        return;
+      }
+      event.preventDefault();
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        shell.openExternal(navigationUrl);
+      }
+    } catch {
+      event.preventDefault();
+    }
   });
 
   if (VITE_DEV_SERVER_URL) {
@@ -111,7 +146,17 @@ ipcMain.on('log', (event, msg) => {
 });
 
 ipcMain.handle('open-external', async (event, url) => {
-  await shell.openExternal(url);
+  if (typeof url !== 'string') return;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      await shell.openExternal(url);
+    } else {
+      console.warn('[Security] Denied open-external for non-http(s) protocol:', url);
+    }
+  } catch (err) {
+    console.error('[Security] Failed to parse URL for open-external:', url, err);
+  }
 });
 
 ipcMain.on('set-window-mode', (event, mode: 'compact' | 'expanded') => {

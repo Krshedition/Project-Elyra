@@ -3,11 +3,12 @@ export class AudioStreamer {
   private nextTime: number = 0;
   private analyser: AnalyserNode;
   private dataArray: Uint8Array;
+  private activeSources: Set<AudioBufferSourceNode> = new Set();
 
   constructor() {
     // @ts-ignore
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    this.audioContext = new AudioContext({ sampleRate: 24000 });
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    this.audioContext = new AudioContextClass({ sampleRate: 24000 });
     this.analyser = this.audioContext.createAnalyser();
     this.analyser.fftSize = 256;
     this.analyser.connect(this.audioContext.destination);
@@ -25,7 +26,7 @@ export class AudioStreamer {
 
   addPCM16(base64: string) {
     if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
+      this.audioContext.resume().catch(() => {});
     }
     
     const binary = atob(base64);
@@ -50,6 +51,11 @@ export class AudioStreamer {
     source.buffer = audioBuffer;
     source.connect(this.analyser);
 
+    this.activeSources.add(source);
+    source.onended = () => {
+      this.activeSources.delete(source);
+    };
+
     if (this.nextTime < this.audioContext.currentTime) {
       this.nextTime = this.audioContext.currentTime;
     }
@@ -63,23 +69,20 @@ export class AudioStreamer {
   }
 
   interrupt() {
-    if (this.audioContext) {
-      this.audioContext.close();
+    for (const src of this.activeSources) {
+      try {
+        src.stop();
+        src.disconnect();
+      } catch {}
     }
-    // @ts-ignore
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    this.audioContext = new AudioContext({ sampleRate: 24000 });
-    this.analyser = this.audioContext.createAnalyser();
-    this.analyser.fftSize = 256;
-    this.analyser.connect(this.audioContext.destination);
-    this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-    this.nextTime = 0;
+    this.activeSources.clear();
+    this.nextTime = this.audioContext ? this.audioContext.currentTime : 0;
   }
 
   stop() {
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.nextTime = 0;
+    this.interrupt();
+    if (this.audioContext && this.audioContext.state !== 'closed') {
+      this.audioContext.close().catch(() => {});
     }
   }
 }

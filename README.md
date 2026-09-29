@@ -357,8 +357,15 @@ Project Elyra follows a milestone-driven development roadmap:
    - Background SQLite calendar scheduling and Windows notification reminder daemon.
    - Headless web search, weather, URL scraping, and crypto data extraction.
    - Local n8n Webhook Bridge (`trigger_n8n_workflow`) for enterprise SaaS automation.
-4. **Milestone 4: Complex Workflow & Self-Healing Automation** *(Upcoming Focus)*
-   - Chaining cross-application multi-step flows and dynamic error recovery.
-   - WSL / Kali Linux terminal task automation.
-5. **Milestone 5: System Optimization & Final Testing** *(Planned)*
-   - Bandwidth optimization, security sandboxing, and final presentation edge-case hardening.
+4. **Milestone 4: Complex Workflow & Self-Healing Automation** *(Completed)*
+   - Multi-step task decomposition and sub-problem workflow state machine.
+   - Autonomous self-healing execution pipeline with dynamic error recovery and DOM re-inspection.
+   - Deep Research Engine aggregating multi-source verified findings with domain citation proofs.
+   - WSL / Linux terminal execution bridge for developer workflows.
+5. **Milestone 5: System Optimization & Final Testing** *(Completed)*
+   - Audio streamer optimization: replaced destructive AudioContext teardown with active buffer node tracking to eliminate WebAudio leaks.
+   - Vision bandwidth optimization: speech-aware capture pausing, adaptive resolution (1280x720 active / 960x540 idle @ 0.60-0.75 quality saving ~60% bandwidth), and proper `MediaStream` track disposal on disconnect.
+   - Security sandboxing: window navigation guards (`will-navigate`), popup denial (`setWindowOpenHandler`), safe external protocol validation (`http:`/`https:` only), Windows system directory write protection, script execution blacklisting, and protected OS process termination blocks (`csrss`, `lsass`, `explorer`, etc.).
+   - Memory bounds: capped task logging arrays to 150 entries for sustained autonomous workflows.
+   - Edge-case verification: automated regression and security test suite (`scripts/test-milestone5.mjs`).
+
