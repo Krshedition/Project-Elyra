@@ -281,6 +281,10 @@ ipcMain.handle('browser:pressKey', async (event, payload: { key: string, tabId?:
   return await browser.pressKey(payload, maybeTabId);
 });
 
+ipcMain.handle('browser:verifyOutcome', async (event, payload: any) => {
+  return await browser.verifyActionOutcome(payload || {});
+});
+
 ipcMain.handle('search-memory', async (event, query: string) => {
   return searchFacts(query);
 });

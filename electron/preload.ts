@@ -92,6 +92,9 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   browserPressKey(key: string, tabId?: number | string) {
     return ipcRenderer.invoke('browser:pressKey', { key, tabId })
   },
+  browserVerifyOutcome(payload: any) {
+    return ipcRenderer.invoke('browser:verifyOutcome', payload)
+  },
   sendEmail(options: { to: string; subject: string; body: string; isHtml?: boolean }) {
     return ipcRenderer.invoke('email:send', options)
   },

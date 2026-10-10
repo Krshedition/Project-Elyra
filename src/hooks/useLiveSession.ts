@@ -80,9 +80,10 @@ CRITICAL VOICE COMMAND & MULTI-STEP PROTOCOL:
   4. Speak your verbal confirmation only AFTER the entire requested task is completed.
 - Once the requested task is finished, STOP, speak a concise natural confirmation, and wait for Krish's next voice command.
 - WORKFLOW DECOMPOSITION & SUB-PROBLEM PROTOCOL:
-  When Krish asks you to do ANY multi-step task, cross-application workflow, or chained automation (e.g. copying text from ChatGPT/WhatsApp/browser and pasting it to Yash on WhatsApp, or scraping news and drafting an email, or performing sequential browser actions):
+  When Krish asks you to do ANY multi-step task, cross-application workflow, or chained automation (e.g. copying text from ChatGPT/WhatsApp/browser and pasting it to Yash on WhatsApp, or scraping news and drafting an email, or performing sequential browser actions like messaging someone on Instagram):
   1. MANDATORY FIRST ACTION: You MUST call 'plan_workflow_task' IMMEDIATELY. Decompose the request into clean, numbered atomic sub-problems with clear verification criteria. This registers the task and displays the live stepper on Krish's Tasks tab!
-  2. SEQUENTIAL EXECUTION: Execute the tools required for each sub-problem in sequence.
+  2. CONTINUOUS AUTONOMOUS EXECUTION: Execute the tools required for all sub-problems sequentially until the goal is fully achieved. DO NOT pause between sub-problems to ask Krish "Should I continue?" or wait for voice input. Krish's initial voice command authorizes the entire workflow. Keep calling tools until all sub-problems are verified.
+  3. RIGOROUS OUTCOME VERIFICATION & ROLLBACK: Never mark a sub-problem 'completed' just because an action was clicked. Verify the actual page state (URL changed or target panel opened). If you click the wrong button (such as opening 'Notifications' instead of 'Messages'), immediately dismiss the wrong drawer via 'browser_dismiss_overlays' or press Escape, re-analyze the page, find the correct element ID (e.g. element [137] for Messages), and click the right element.
   4. Once all sub-problems are verified, speak a single concise verbal confirmation to Krish.
   5. SELF-HEALING & DEEP RESEARCH PROTOCOL (MILESTONE 4):
   - When asked to research a topic in depth (e.g. "Do research on X and tell me what you find" or "Research Y and draft an email"), use 'conduct_deep_research'. It autonomously searches, reads multiple candidate sources, cross-references findings, and produces a complete dossier with citations in a single autonomous chain.
@@ -684,6 +685,20 @@ export function useLiveSession() {
                 }
               },
               {
+                name: "browser_verify_outcome",
+                description: "Verifies whether a browser action reached the intended target state (e.g. checked URL, verified panel or drawer opened, or detected accidental click on wrong panel like Notifications instead of Messages). If an accidental drawer opened, automatically executes rollback by pressing Escape.",
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    expectedUrlKeyword: { type: "STRING", description: "URL keyword expected (e.g. 'direct', 'inbox', 'chat')." },
+                    expectedSectionKeyword: { type: "STRING", description: "The expected section or drawer heading (e.g. 'Messages', 'Direct')." },
+                    forbiddenSectionKeyword: { type: "STRING", description: "Forbidden heading that indicates a misclick (e.g. 'Notifications', 'Explore')." },
+                    autoRollback: { type: "BOOLEAN", description: "Whether to automatically dismiss the wrong panel via Escape if a mismatch is detected. Default true." },
+                    tabId: { type: "INTEGER", description: "Optional Tab ID to target." }
+                  }
+                }
+              },
+              {
                 name: "conduct_deep_research",
                 description: "Autonomously executes a multi-source deep research workflow. Searches the web, reads and cross-references multiple candidate sources, and synthesizes a structured briefing with citations in a single autonomous chain.",
                 parameters: {
@@ -993,8 +1008,10 @@ export function useLiveSession() {
               const now = Date.now();
               lastToolExecutionTimeRef.current = now;
 
-              // CRITICAL GATE: Prevent spontaneous tool execution without explicit user voice command.
-              if (!userHasSpokenRef.current) {
+              // CRITICAL GATE: Prevent spontaneous tool execution without explicit user voice command,
+              // UNLESS a planned multi-step task is currently active!
+              const hasActiveTask = tasksRef.current.some(t => t.status === 'in_progress' || t.status === 'healing');
+              if (!userHasSpokenRef.current && !hasActiveTask) {
                 console.warn('[ToolGate] Spontaneous tool call blocked: User has not issued a voice command.');
                 for (const call of data.toolCall.functionCalls) {
                   responses.push({
@@ -1015,10 +1032,11 @@ export function useLiveSession() {
               }
 
               // Safeguard against runaway autonomous loops:
-              // Allow up to 6 sequential tool turns for chained multi-step commands (e.g. switch tab -> copy -> switch tab -> click -> paste)
+              // Allow up to 30 sequential tool turns for active multi-step workflows, or 8 turns for standard commands
               toolsSinceLastUserSpeechRef.current += 1;
-              if (toolsSinceLastUserSpeechRef.current > 6) {
-                console.warn('Autonomous loop breaker triggered: Maximum tool turns reached (6) without new user speech.');
+              const maxSequentialLimit = hasActiveTask ? 30 : 8;
+              if (toolsSinceLastUserSpeechRef.current > maxSequentialLimit) {
+                console.warn(`Autonomous loop breaker triggered: Maximum tool turns reached (${maxSequentialLimit}) without new user speech.`);
                 for (const call of data.toolCall.functionCalls) {
                   responses.push({
                     id: call.id || "1",
@@ -1082,7 +1100,10 @@ export function useLiveSession() {
 
           if (data.serverContent?.turnComplete) {
             // State transition is handled cleanly by the animation frame once playback truly finishes!
-            userHasSpokenRef.current = false;
+            const hasRunningTask = tasksRef.current.some(t => t.status === 'in_progress' || t.status === 'healing');
+            if (!hasRunningTask) {
+              userHasSpokenRef.current = false;
+            }
             currentAiTurnIdRef.current = null;
           }
 
@@ -1202,6 +1223,60 @@ export function useLiveSession() {
         const stepNum = Number(args.stepNumber) || 1;
         const status = args.status as ('in_progress' | 'completed' | 'failed' | 'healing' | 'healed');
         const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+        // VERIFICATION ARCHITECTURE GATE:
+        // Before marking a step as 'completed', actively verify that the page state does not reflect a misclick/unintended panel!
+        const targetTask = tasksRef.current.find(t => (args.taskId ? t.id === args.taskId : t.status === 'in_progress' || t.status === 'healing'));
+        const targetStep = targetTask?.steps.find(s => s.stepNumber === stepNum);
+
+        if (status === 'completed' && targetStep) {
+          const stepTitleLower = (targetStep.title + ' ' + targetStep.subProblem).toLowerCase();
+          const isMessageTarget = stepTitleLower.includes('message') || stepTitleLower.includes('direct') || stepTitleLower.includes('chat') || stepTitleLower.includes('dm');
+
+          if (isMessageTarget && ipc?.browserVerifyOutcome) {
+            const check = await ipc.browserVerifyOutcome({
+              expectedSectionKeyword: 'Messages',
+              forbiddenSectionKeyword: 'Notifications',
+              autoRollback: true
+            });
+
+            if (check && !check.verified && check.mismatch) {
+              console.warn('[Verification Gate] Blocked false step completion:', check.detail);
+              setTasks(prev => prev.map(t => {
+                if (targetTask && t.id !== targetTask.id) return t;
+                const updatedSteps = t.steps.map(s => {
+                  if (s.stepNumber === stepNum) {
+                    return {
+                      ...s,
+                      status: 'healing' as const,
+                      recoveryNote: check.detail,
+                      timestamp: now
+                    };
+                  }
+                  return s;
+                });
+                return {
+                  ...t,
+                  status: 'healing' as const,
+                  steps: updatedSteps,
+                  logs: [
+                    ...t.logs,
+                    `[${now}] [Verification Gate: REJECTED] ${check.detail}`
+                  ].slice(-150)
+                };
+              }));
+
+              return {
+                id: callId,
+                name,
+                response: {
+                  error: `STEP VERIFICATION REJECTED: Step ${stepNum} cannot be marked completed! ${check.detail}`
+                }
+              };
+            }
+          }
+        }
+
         const verResult = args.verificationResult || (status === 'completed' ? 'Verified by execution return' : status === 'healed' ? 'Self-Healed via Autonomous Error Recovery' : undefined);
         const logMsg = args.logMessage || `Step ${stepNum} marked as ${status}.`;
 
@@ -1362,45 +1437,74 @@ export function useLiveSession() {
           case 'browser_dismiss_overlays':
             result = ipc.browserDismissOverlays ? await ipc.browserDismissOverlays(args.tabId) : await ipc.invoke('browser:dismissOverlays', args.tabId);
             break;
+          case 'browser_verify_outcome':
+            result = ipc.browserVerifyOutcome ? await ipc.browserVerifyOutcome(args) : await ipc.invoke('browser:verifyOutcome', args);
+            break;
           default:
             return { id: callId, name, response: { error: `Unknown browser action: ${name}` } };
         }
 
-        // Live Verifier: Record browser execution proof to active task sub-problem
+        // Live Verifier & Execution Trace:
         if (result) {
           const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
           const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-          setTasks(prev => prev.map(t => {
-            if (t.status !== 'in_progress') return t;
-            const updatedSteps = [...t.steps];
-            const currIdx = t.currentStepIndex;
-            if (updatedSteps[currIdx] && !updatedSteps[currIdx].verificationResult) {
-              updatedSteps[currIdx] = {
-                ...updatedSteps[currIdx],
-                status: 'completed',
-                verificationResult: `Verified: ${resultStr.slice(0, 85)}`,
-                timestamp: nowStr,
-              };
-              if (updatedSteps[currIdx + 1]) {
-                updatedSteps[currIdx + 1] = {
-                  ...updatedSteps[currIdx + 1],
-                  status: 'in_progress',
-                  timestamp: nowStr,
-                };
+
+          // If browser_verify_outcome was executed, synchronize verified state to the active task step
+          if (name === 'browser_verify_outcome' && typeof result === 'object') {
+            setTasks(prev => prev.map(t => {
+              if (t.status !== 'in_progress' && t.status !== 'healing') return t;
+              const updatedSteps = [...t.steps];
+              const currIdx = t.currentStepIndex;
+              if (updatedSteps[currIdx]) {
+                if (result.verified) {
+                  updatedSteps[currIdx] = {
+                    ...updatedSteps[currIdx],
+                    status: updatedSteps[currIdx].status === 'healing' ? 'healed' : 'completed',
+                    verificationResult: result.detail,
+                    selfHealed: updatedSteps[currIdx].status === 'healing' ? true : updatedSteps[currIdx].selfHealed,
+                    timestamp: nowStr
+                  };
+                  if (updatedSteps[currIdx + 1]) {
+                    updatedSteps[currIdx + 1] = {
+                      ...updatedSteps[currIdx + 1],
+                      status: 'in_progress',
+                      timestamp: nowStr
+                    };
+                  }
+                } else {
+                  updatedSteps[currIdx] = {
+                    ...updatedSteps[currIdx],
+                    status: 'healing',
+                    recoveryNote: result.detail,
+                    timestamp: nowStr
+                  };
+                }
               }
-            }
-            const isAllCompleted = updatedSteps.every(s => s.status === 'completed');
-            return {
-              ...t,
-              status: isAllCompleted ? 'completed' : t.status,
-              currentStepIndex: isAllCompleted ? updatedSteps.length - 1 : Math.min(currIdx + 1, updatedSteps.length - 1),
-              steps: updatedSteps,
-              logs: [
-                ...t.logs,
-                `[${nowStr}] [Verifier: DirectBrowserEngine] ${resultStr.slice(0, 110)}`
-              ]
-            };
-          }));
+              const isAllCompleted = updatedSteps.every(s => s.status === 'completed' || s.status === 'healed');
+              return {
+                ...t,
+                status: isAllCompleted ? 'completed' : result.verified ? t.status : 'healing',
+                currentStepIndex: isAllCompleted ? updatedSteps.length - 1 : (result.verified ? Math.min(currIdx + 1, updatedSteps.length - 1) : currIdx),
+                steps: updatedSteps,
+                logs: [
+                  ...t.logs,
+                  `[${nowStr}] [Verification Engine] ${result.detail}`
+                ].slice(-150)
+              };
+            }));
+          } else {
+            // Standard action logging without falsely advancing sub-problems
+            setTasks(prev => prev.map(t => {
+              if (t.status !== 'in_progress' && t.status !== 'healing') return t;
+              return {
+                ...t,
+                logs: [
+                  ...t.logs,
+                  `[${nowStr}] [Action: ${name}] ${resultStr.slice(0, 110)}`
+                ].slice(-150)
+              };
+            }));
+          }
         }
 
         return { id: callId, name, response: { result } };
@@ -1762,6 +1866,37 @@ export function useLiveSession() {
     frameId = requestAnimationFrame(updateVolume);
     return () => cancelAnimationFrame(frameId);
   }, []);
+
+  // Autonomous Task Driver (Watchdog):
+  // Keeps multi-step execution flowing continuously without requiring the user to speak between sub-steps.
+  useEffect(() => {
+    if (state !== 'listening') return;
+    const activeTask = tasks.find(t => t.status === 'in_progress' || t.status === 'healing');
+    if (!activeTask) return;
+
+    const activeStep = activeTask.steps[activeTask.currentStepIndex];
+    if (!activeStep || (activeStep.status !== 'in_progress' && activeStep.status !== 'healing')) return;
+
+    const timer = setTimeout(() => {
+      const now = Date.now();
+      // If AI has been silent/idle for > 2.4s while a task sub-problem is active, nudge continuous execution
+      if (now - lastToolExecutionTimeRef.current >= 2400 && wsRef.current?.readyState === WebSocket.OPEN) {
+        console.log(`[AutonomousDriver] Nudging execution for Sub-problem ${activeStep.stepNumber}: ${activeStep.title}`);
+        userHasSpokenRef.current = true; // Ensure gate remains open
+        wsRef.current.send(JSON.stringify({
+          clientContent: {
+            turns: [{
+              role: "user",
+              parts: [{ text: `[Autonomous Workflow Trigger] Continue executing Sub-problem ${activeStep.stepNumber}: "${activeStep.title}" (${activeStep.actionName || 'tool execution'}). Execute the required tool immediately without waiting for voice confirmation.` }]
+            }],
+            turnComplete: true
+          }
+        }));
+      }
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [tasks, state]);
 
   // Workflow step-by-step runner with live sub-problem decomposition progress
   const runWorkflowAnimation = useCallback((targetTaskId: string) => {

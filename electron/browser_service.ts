@@ -777,7 +777,30 @@ export class DirectBrowserEngine {
         }
       }
 
-      return `${selfHealedNote}Clicked element [${id}] on Tab [Tab ID: ${tid}].`;
+      // Post-click state verification inspection
+      let outcomeNote = '';
+      try {
+        await page.waitForTimeout(400);
+        const postUrl = page.url();
+        const activeDrawer = await page.evaluate(() => {
+          const dialogs = document.querySelectorAll('dialog[open], [role="dialog"], [aria-modal="true"], div[class*="drawer"], div[class*="panel"], div[class*="sidebar"]');
+          for (const d of Array.from(dialogs)) {
+            const h = d.querySelector('h1, h2, h3, [role="heading"], div[dir="auto"]');
+            if (h && (h as HTMLElement).innerText?.trim()) {
+              return (h as HTMLElement).innerText.trim();
+            }
+          }
+          return null;
+        }).catch(() => null);
+
+        if (activeDrawer) {
+          outcomeNote = ` [State Notice: Drawer/Panel '${activeDrawer}' opened, URL: ${postUrl}]`;
+        } else {
+          outcomeNote = ` [State Notice: URL: ${postUrl}]`;
+        }
+      } catch {}
+
+      return `${selfHealedNote}Clicked element [${id}] on Tab [Tab ID: ${tid}].${outcomeNote}`;
     } catch (err: any) {
       return `Failed to click element ${id} on Tab [Tab ID: ${tabId || this.currentTabId}]: ${err.message}`;
     }
@@ -879,6 +902,140 @@ export class DirectBrowserEngine {
       return `Pressed key "${key}" on Tab [Tab ID: ${tid}].`;
     } catch (err: any) {
       return `Failed to press key on Tab [Tab ID: ${tabId || this.currentTabId}]: ${err.message}`;
+    }
+  }
+
+  /**
+   * Action Verification & Rollback Architecture:
+   * Inspects current URL, active drawer/dialog headings, and DOM state.
+   * If an unwanted panel (such as "Notifications" when looking for "Messages") is open,
+   * it triggers an automatic rollback via Escape, re-scans the DOM, and reports the mismatch.
+   */
+  public async verifyActionOutcome(params: {
+    expectedUrlKeyword?: string;
+    expectedSectionKeyword?: string;
+    forbiddenSectionKeyword?: string;
+    autoRollback?: boolean;
+    tabId?: number | string;
+  }): Promise<{
+    verified: boolean;
+    mismatch: boolean;
+    currentUrl: string;
+    currentTitle: string;
+    detectedDrawer?: string;
+    rolledBack?: boolean;
+    suggestedCandidates?: { id: string; text: string }[];
+    detail: string;
+  }> {
+    try {
+      const { id: tid, page } = await this.resolvePage(params.tabId);
+      await page.waitForTimeout(400);
+
+      const currentUrl = page.url();
+      let currentTitle = '';
+      try { currentTitle = await page.title(); } catch {}
+
+      // Detect any active modal, drawer, or sidebar panel heading
+      const detectedDrawer = await page.evaluate(() => {
+        const dialogs = document.querySelectorAll('dialog[open], [role="dialog"], [aria-modal="true"], div[class*="drawer"], div[class*="panel"], div[class*="sidebar"]');
+        for (const d of Array.from(dialogs)) {
+          const h = d.querySelector('h1, h2, h3, [role="heading"], div[dir="auto"]');
+          if (h && (h as HTMLElement).innerText?.trim()) {
+            return (h as HTMLElement).innerText.trim();
+          }
+        }
+        return null;
+      }).catch(() => null);
+
+      const autoRollback = params.autoRollback !== false;
+      const expectedSection = (params.expectedSectionKeyword || '').toLowerCase().trim();
+      const forbiddenSection = (params.forbiddenSectionKeyword || '').toLowerCase().trim();
+
+      // Check for forbidden or mismatch drawer (e.g. "Notifications" when expecting "Messages")
+      let isMismatch = false;
+      let mismatchReason = '';
+
+      if (detectedDrawer) {
+        const lowerDrawer = detectedDrawer.toLowerCase();
+        if (forbiddenSection && lowerDrawer.includes(forbiddenSection)) {
+          isMismatch = true;
+          mismatchReason = `Active panel matches forbidden keyword '${params.forbiddenSectionKeyword}' (Drawer: "${detectedDrawer}")`;
+        } else if (expectedSection && !lowerDrawer.includes(expectedSection) && (lowerDrawer.includes('notification') || lowerDrawer.includes('activity') || lowerDrawer.includes('search') || lowerDrawer.includes('explore'))) {
+          isMismatch = true;
+          mismatchReason = `Opened '${detectedDrawer}' panel instead of expected target '${params.expectedSectionKeyword}'`;
+        }
+      }
+
+      if (isMismatch) {
+        let rolledBack = false;
+        if (autoRollback) {
+          // Rollback: press Escape to close the wrong drawer
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(350);
+          rolledBack = true;
+        }
+
+        // Search for true candidate elements matching expectedSection
+        let candidates: { id: string; text: string }[] = [];
+        if (expectedSection) {
+          candidates = await page.evaluate((kw) => {
+            const list: { id: string; text: string }[] = [];
+            document.querySelectorAll('[data-elyra-id]').forEach(el => {
+              const text = ((el as HTMLElement).innerText || el.getAttribute('aria-label') || el.getAttribute('title') || '').toLowerCase();
+              if (text.includes(kw)) {
+                list.push({
+                  id: el.getAttribute('data-elyra-id') || '',
+                  text: ((el as HTMLElement).innerText || el.getAttribute('aria-label') || el.getAttribute('title') || '').slice(0, 35)
+                });
+              }
+            });
+            return list;
+          }, expectedSection).catch(() => []);
+        }
+
+        return {
+          verified: false,
+          mismatch: true,
+          currentUrl,
+          currentTitle,
+          detectedDrawer: detectedDrawer || undefined,
+          rolledBack,
+          suggestedCandidates: candidates,
+          detail: `Verification Failed: ${mismatchReason}. ${rolledBack ? 'Auto-rolled back by closing panel via Escape.' : ''} ${candidates.length > 0 ? `Target element found at ID: ${candidates.map(c => `[${c.id}] ("${c.text}")`).join(', ')}` : 'Please run browser_analyze_page to locate the correct element.'}`
+        };
+      }
+
+      // Check URL keyword if specified
+      if (params.expectedUrlKeyword) {
+        const lowerKw = params.expectedUrlKeyword.toLowerCase();
+        if (!currentUrl.toLowerCase().includes(lowerKw)) {
+          return {
+            verified: false,
+            mismatch: true,
+            currentUrl,
+            currentTitle,
+            detectedDrawer: detectedDrawer || undefined,
+            detail: `Verification Failed: Expected URL to contain '${params.expectedUrlKeyword}', but current URL is '${currentUrl}'.`
+          };
+        }
+      }
+
+      return {
+        verified: true,
+        mismatch: false,
+        currentUrl,
+        currentTitle,
+        detectedDrawer: detectedDrawer || undefined,
+        detail: `Verified: Target state reached successfully [URL: ${currentUrl}${detectedDrawer ? `, View: "${detectedDrawer}"` : ''}].`
+      };
+    } catch (err: any) {
+      return {
+        verified: false,
+        mismatch: false,
+        currentUrl: '',
+        currentTitle: '',
+        detail: `Verification check failed: ${err.message}`
+      };
     }
   }
 }
