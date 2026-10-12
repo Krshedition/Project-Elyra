@@ -547,20 +547,79 @@ export class DirectBrowserEngine {
       let selfHealedNote = '';
       let targetLocator;
 
+      // 1. Auto-dismiss Stickers / Emoji / GIF drawers if open so they don't hijack focus
+      try {
+        const hasStickerDrawer = await page.evaluate(() => {
+          const d = document.querySelector('div[aria-label="Stickers"], div[aria-label="GIFs"], div:has(h2:has-text("Stickers"))');
+          if (d) return true;
+          const headings = Array.from(document.querySelectorAll('h1, h2, h3, [role="heading"]'));
+          return headings.some(h => (h as HTMLElement).innerText?.toLowerCase().includes('sticker'));
+        }).catch(() => false);
+
+        if (hasStickerDrawer) {
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(300);
+          selfHealedNote += `[Auto-Dismissed Stickers Drawer via Escape] `;
+        }
+      } catch {}
+
+      const currentUrl = page.url().toLowerCase();
+      const inDirectThread = currentUrl.includes('/direct/t/') || currentUrl.includes('/messages/t/') || currentUrl.includes('/t/');
+      const isChatPage = inDirectThread || currentUrl.includes('/direct/') || currentUrl.includes('/messages') || currentUrl.includes('whatsapp.com') || currentUrl.includes('discord.com');
+      const isExplicitSearch = !inDirectThread && !!(selector && selector.toLowerCase().includes('search'));
+
+      // 2. Resolve selector: support numeric IDs e.g. "33" or "[33]"
       if (selector) {
-        targetLocator = page.locator(selector).first();
-      } else {
-        targetLocator = page.locator('input:visible, textarea:visible, [contenteditable="true"]:visible, [role="textbox"]:visible').first();
+        const trimmed = selector.trim();
+        const numMatch = trimmed.match(/^\[?(\d+)\]?$/);
+        if (numMatch) {
+          targetLocator = page.locator(`[data-elyra-id="${numMatch[1]}"]`).first();
+        } else {
+          targetLocator = page.locator(selector).first();
+        }
+      }
+
+      // 3. If in a chat conversation and not explicitly searching, prioritize the chat reply box!
+      if (!isExplicitSearch && isChatPage && (!targetLocator || await targetLocator.count() === 0)) {
+        const replyBoxSelectors = [
+          'div[role="textbox"][contenteditable="true"]',
+          'div[contenteditable="true"][aria-label*="Message" i]',
+          'div[aria-label*="Message" i]',
+          'div[aria-placeholder*="Message" i]',
+          '[placeholder*="Message..." i]',
+          '[placeholder*="Message" i]',
+          'footer div[role="textbox"]',
+          'footer [contenteditable="true"]',
+          'div[contenteditable="true"]:not([placeholder*="Search" i])'
+        ];
+
+        for (const sel of replyBoxSelectors) {
+          const loc = page.locator(sel).first();
+          if (await loc.count() > 0 && await loc.isVisible()) {
+            targetLocator = loc;
+            selfHealedNote += `[Prioritized Chat Reply Box] `;
+            break;
+          }
+        }
+      }
+
+      // 4. Default fallback: prioritize textboxes and textareas over search inputs!
+      if (!targetLocator || await targetLocator.count() === 0) {
+        if (!isExplicitSearch && isChatPage) {
+          targetLocator = page.locator('div[role="textbox"]:visible, [contenteditable="true"]:not([placeholder*="Search" i]):visible, textarea:visible').first();
+        } else {
+          targetLocator = page.locator('div[role="textbox"]:visible, [contenteditable="true"]:visible, textarea:visible, input:visible').first();
+        }
       }
 
       if (await targetLocator.count() === 0) {
         const overlayRes = await this.dismissOverlays(id);
         if (overlayRes.dismissed) {
-          selfHealedNote = `[Self-Healed via Overlay Dismissal] `;
+          selfHealedNote += `[Self-Healed via Overlay Dismissal] `;
           if (selector) {
             targetLocator = page.locator(selector).first();
           } else {
-            targetLocator = page.locator('input:visible, textarea:visible, [contenteditable="true"]:visible, [role="textbox"]:visible').first();
+            targetLocator = page.locator('div[role="textbox"]:visible, [contenteditable="true"]:visible, textarea:visible, input:visible').first();
           }
         }
       }
@@ -571,7 +630,33 @@ export class DirectBrowserEngine {
 
       await targetLocator.scrollIntoViewIfNeeded();
 
-      // Handle contenteditable / rich-text editors (e.g. WhatsApp, ChatGPT, Notion)
+      // 5. Detection guard: Did targetLocator accidentally pick a search bar when on a chat page?
+      const isSearchField = await targetLocator.evaluate((el: HTMLElement) => {
+        const ph = (el.getAttribute('placeholder') || el.getAttribute('aria-label') || '').toLowerCase();
+        return ph.includes('search');
+      }).catch(() => false);
+
+      if (isSearchField && (inDirectThread || (!isExplicitSearch && isChatPage))) {
+        // Clear accidentally targeted search bar so previous typed text (e.g. "hey Somraj...") doesn't pollute it
+        await targetLocator.evaluate((el: HTMLInputElement) => {
+          el.value = '';
+          el.blur();
+        }).catch(() => {});
+
+        const trueReply = page.locator('div[role="textbox"][contenteditable="true"], div[aria-label*="Message" i], div[contenteditable="true"]:not([placeholder*="Search" i]), footer [contenteditable="true"]').first();
+        if (await trueReply.count() > 0 && await trueReply.isVisible()) {
+          targetLocator = trueReply;
+          selfHealedNote += `[Self-Healed: Redirected from conversation search bar to chat reply composer on thread] `;
+        }
+      }
+
+      if (inDirectThread) {
+        // Ensure any open stickers/GIFs drawer is dismissed before typing so focus is clean
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(100);
+      }
+
+      // Handle contenteditable / rich-text editors (e.g. WhatsApp, Instagram, ChatGPT, Notion)
       const isContentEditable = await targetLocator.evaluate((el: HTMLElement) => {
         return el.isContentEditable || el.getAttribute('contenteditable') === 'true' || el.getAttribute('role') === 'textbox';
       }).catch(() => false);
@@ -594,7 +679,7 @@ export class DirectBrowserEngine {
         await page.keyboard.press('Enter');
       }
 
-      return `${selfHealedNote}Typed "${text}" into input on Tab [Tab ID: ${id}] ${pressEnter ? 'and pressed Enter' : ''}`;
+      return `${selfHealedNote}Typed "${text}" into ${isContentEditable ? 'chat reply composer' : 'input'} on Tab [Tab ID: ${id}] ${pressEnter ? 'and pressed Enter' : ''}`;
     } catch (err: any) {
       return `Failed to type input on Tab [Tab ID: ${tabId || this.currentTabId}]: ${err.message}`;
     }
@@ -653,7 +738,7 @@ export class DirectBrowserEngine {
         let counter = 1;
         const results: any[] = [];
         
-        const elements = document.querySelectorAll('a, button, input, textarea, select, [role="button"], [role="link"], [tabindex]:not([tabindex="-1"])');
+        const elements = document.querySelectorAll('a, button, input, textarea, select, [role="button"], [role="link"], [role="textbox"], [contenteditable="true"], [tabindex]:not([tabindex="-1"])');
         
         elements.forEach((el) => {
           if (counter > 200) return;
@@ -794,7 +879,13 @@ export class DirectBrowserEngine {
         }).catch(() => null);
 
         if (activeDrawer) {
-          outcomeNote = ` [State Notice: Drawer/Panel '${activeDrawer}' opened, URL: ${postUrl}]`;
+          const lowerDrawer = activeDrawer.toLowerCase();
+          if (lowerDrawer.includes('sticker') || lowerDrawer.includes('gif')) {
+            await page.keyboard.press('Escape');
+            outcomeNote = ` [State Notice: Accidental drawer '${activeDrawer}' auto-dismissed via Escape to keep chat composer clear]`;
+          } else {
+            outcomeNote = ` [State Notice: Drawer/Panel '${activeDrawer}' opened, URL: ${postUrl}]`;
+          }
         } else {
           outcomeNote = ` [State Notice: URL: ${postUrl}]`;
         }
