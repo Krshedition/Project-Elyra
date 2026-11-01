@@ -160,6 +160,7 @@ export function useLiveSession() {
   const [swapReady, setSwapReady] = useState<boolean>(false);
   const handleSwapRef = useRef<(() => void) | null>(null);
   const currentAiTurnIdRef = useRef<string | null>(null);
+  const lastEmailSentTimeRef = useRef<number>(0);
 
   // Single-source Elyra visual status
   const hasActiveTask = tasks.some(t => t.status === 'in_progress');
@@ -1160,8 +1161,8 @@ export function useLiveSession() {
                 const isIncompleteCommand = /\b(your\s+second|second|next|and\s+then|also|to|so)\s*$/i.test(lastUserSpeech);
                 const isPureCompliment = /^(okay|ok|well\s+done|good\s+job|great|nice|shabash|shukriya|thanks|thank\s+you|awesome|mast|badhiya)\s*[.,!]*$/i.test(lastUserSpeech);
 
-                if (!hasActiveTask && (isIncompleteCommand || isPureCompliment)) {
-                  if (call.name === 'browser_navigate' || call.name === 'browser_new_tab' || call.name === 'send_email' || (call.name === 'desktopAction' && (call.args as any)?.actionName === 'open_app')) {
+                if (isIncompleteCommand || isPureCompliment) {
+                  if (call.name === 'browser_navigate' || call.name === 'browser_new_tab' || call.name === 'send_email' || call.name === 'confirm_and_send_email' || (call.name === 'desktopAction' && (call.args as any)?.actionName === 'open_app')) {
                     console.warn(`[AntiHallucinationGate] Blocked action (${call.name}) because user input was incomplete or just appreciation: "${pendingUserDraftRef.current}"`);
                     responses.push({
                       id: call.id || "1",
@@ -1175,7 +1176,7 @@ export function useLiveSession() {
                 }
 
                 // Strictly block unrequested Pinterest or social media navigations:
-                if (!hasActiveTask && (call.name === 'browser_navigate' || call.name === 'browser_new_tab')) {
+                if (call.name === 'browser_navigate' || call.name === 'browser_new_tab') {
                   const targetUrl = ((call.args as any)?.url || '').toLowerCase();
                   if (targetUrl.includes('pinterest') && !lastUserSpeech.includes('pinterest')) {
                     console.warn(`[AntiHallucinationGate] Blocked hallucinated navigation to Pinterest.`);
@@ -1190,15 +1191,37 @@ export function useLiveSession() {
                   }
                 }
 
-                // Strictly block unrequested email dispatch:
-                if (!hasActiveTask && (call.name === 'send_email' || call.name === 'confirm_and_send_email')) {
-                  if (!lastUserSpeech.includes('email') && !lastUserSpeech.includes('mail') && !lastUserSpeech.includes('draft') && !lastUserSpeech.includes('send')) {
-                    console.warn(`[AntiHallucinationGate] Blocked hallucinated email dispatch.`);
+                // STRICT EMAIL SAFETY GATE: Prevent spontaneous, duplicate, or unrequested email dispatch
+                if (call.name === 'send_email' || call.name === 'confirm_and_send_email') {
+                  const isRecentSent = (Date.now() - lastEmailSentTimeRef.current) < 60000;
+                  if (isRecentSent) {
+                    console.warn('[EmailSafetyGate] Blocked duplicate email dispatch within 60s cooldown.');
                     responses.push({
                       id: call.id || "1",
                       name: call.name,
                       response: {
-                        error: `Action blocked: Krish did not ask to send or draft an email. Do not call email tools spontaneously!`
+                        error: "Action blocked: An email was already sent successfully in the last 60 seconds. Do NOT send duplicate emails or call email tools again!"
+                      }
+                    });
+                    continue;
+                  }
+
+                  // Check if current speech or active task is explicitly about email
+                  const isEmailSpeech = /\b(email|mail|draft|gmail|krshedition|inbox|compose)\b/i.test(lastUserSpeech);
+                  const isTaskEmailRelated = tasksRef.current.some(t => 
+                    (t.status === 'in_progress' || t.status === 'healing') && 
+                    /\b(email|mail|draft|send)\b/i.test(t.title + ' ' + t.goal)
+                  );
+                  const hasDraftWaitingApproval = emailDraftRef.current && emailDraftRef.current.status === 'waiting_approval';
+                  const isExplicitSendConfirmation = hasDraftWaitingApproval && /\b(yes|send|bhej|confirm|approved|haan|kar do|go ahead)\b/i.test(lastUserSpeech);
+
+                  if (!isEmailSpeech && !isTaskEmailRelated && !isExplicitSendConfirmation) {
+                    console.warn(`[EmailSafetyGate] Blocked unrequested email dispatch. User speech: "${pendingUserDraftRef.current}"`);
+                    responses.push({
+                      id: call.id || "1",
+                      name: call.name,
+                      response: {
+                        error: `Action blocked: Krish did not ask to send or draft an email (User speech was: "${pendingUserDraftRef.current}"). You are strictly forbidden from calling email tools spontaneously or during unrelated tasks!`
                       }
                     });
                     continue;
@@ -1241,7 +1264,11 @@ export function useLiveSession() {
 
                 const executed = await executeFunctionCall(call);
                 if (executed.response && typeof executed.response === 'object' && !(executed.response as any).error) {
-                  (executed.response as any).continuationHint = "Step completed. If the user's overall goal requires additional steps (such as switching tabs, reading clipboard, or typing/pasting), execute the next tool immediately.";
+                  if (call.name === 'send_email' || call.name === 'confirm_and_send_email') {
+                    (executed.response as any).terminalHint = "The email task is completely finished. Stop calling tools immediately and speak your verbal confirmation.";
+                  } else {
+                    (executed.response as any).continuationHint = "Step completed. If the user's overall goal requires additional steps (such as switching tabs, reading clipboard, or typing/pasting), execute the next tool immediately.";
+                  }
                 }
                 responses.push(executed);
               }
@@ -1939,6 +1966,14 @@ export function useLiveSession() {
 
       // Milestone 3: Headless Background Tools & Email Approval Interceptor
       if (name === 'confirm_and_send_email' || (name === 'send_email' && args.confirmed === true)) {
+        const nowMs = Date.now();
+        if (nowMs - lastEmailSentTimeRef.current < 60000) {
+          return {
+            id: callId,
+            name,
+            response: { error: 'Email was already sent successfully within the last 60 seconds. Duplicate email dispatch is blocked.' }
+          };
+        }
         const activeDraft = emailDraftRef.current || {
           id: 'draft_' + Date.now(),
           to: args.to || 'rahul@mits.edu',
@@ -1983,7 +2018,11 @@ export function useLiveSession() {
             };
           }
 
-          setDraftAndRef(prev => prev ? { ...prev, status: 'sent', sentAt: now } : null);
+          lastEmailSentTimeRef.current = Date.now();
+          userHasSpokenRef.current = false;
+          toolsSinceLastUserSpeechRef.current = 0;
+          setDraftAndRef(null);
+          emailDraftRef.current = null;
 
           const finalSteps: ActivityStep[] = [
             { id: '1', label: 'Understanding your request', status: 'completed', timestamp: now },
@@ -1995,7 +2034,12 @@ export function useLiveSession() {
           setActiveSteps(finalSteps);
 
           // Add confirmation to chat stream
-          setMessages(prev => [
+          setMessages(prev => {
+            const last = prev[prev.length - 1];
+            if (last && last.role === 'assistant' && last.text?.includes(targetTo)) {
+              return prev;
+            }
+            return [
             ...prev,
             {
               id: 'confirm_' + Date.now(),
@@ -2005,7 +2049,8 @@ export function useLiveSession() {
               isSuccess: true,
               emailDraft: { ...activeDraft, status: 'sent', sentAt: now },
             }
-          ]);
+          ];
+        });
 
           return {
             id: callId,
@@ -2747,20 +2792,30 @@ export function useLiveSession() {
         }
       }
 
-      setDraftAndRef(prev => prev ? { ...prev, status: 'sent', sentAt: now } : null);
+      lastEmailSentTimeRef.current = Date.now();
+      userHasSpokenRef.current = false;
+      toolsSinceLastUserSpeechRef.current = 0;
+      setDraftAndRef(null);
+      emailDraftRef.current = null;
 
-      // Add success confirmation message to Chat (Matches Screen 8)
-      setMessages(prev => [
-        ...prev,
-        {
-          id: 'confirm_' + Date.now(),
-          role: 'assistant',
-          text: `I've sent the project presentation update to ${active.recipientName || active.to}. Let me know if you need anything else.`,
-          timestamp: now,
-          isSuccess: true,
-          emailDraft: { ...active, status: 'sent', sentAt: now },
+      // Add success confirmation message to Chat (deduplicated)
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last && last.role === 'assistant' && last.text?.includes(active.to)) {
+          return prev;
         }
-      ]);
+        return [
+          ...prev,
+          {
+            id: 'confirm_' + Date.now(),
+            role: 'assistant',
+            text: `I've sent the project presentation update to ${active.recipientName || active.to}. Let me know if you need anything else.`,
+            timestamp: now,
+            isSuccess: true,
+            emailDraft: { ...active, status: 'sent', sentAt: now },
+          }
+        ];
+      });
 
       // Inform Gemini via clientContent so conversation memory stays synced
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -2768,7 +2823,7 @@ export function useLiveSession() {
           clientContent: {
             turns: [{
               role: "user",
-              parts: [{ text: `[SYSTEM: Krish approved and sent the email to ${active.to} with subject "${active.subject}".]` }]
+              parts: [{ text: `[SYSTEM: Krish approved and sent the email to ${active.to} with subject "${active.subject}". The email is ALREADY SENT. Do NOT call any email tools. Respond verbally in Hindi confirming it has been sent.]` }]
             }],
             turnComplete: true
           }

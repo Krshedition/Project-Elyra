@@ -23,6 +23,7 @@ export class EmailService {
   private static instance: EmailService;
   private cachedConfig: StoredEmailConfig | null = null;
   private configFilePath: string = '';
+  private lastSentTimestamps: Array<{ to: string; subject: string; time: number }> = [];
 
   private constructor() {
     try {
@@ -224,6 +225,23 @@ export class EmailService {
     const displayName = this.cachedConfig?.displayName || 'Krish Bhutiya';
     const fromAddress = `"${displayName}" <${user}>`;
 
+    const now = Date.now();
+    // Prune entries older than 60 seconds
+    this.lastSentTimestamps = this.lastSentTimestamps.filter(e => (now - e.time) < 60000);
+
+    // Guard: Prevent sending duplicate emails to the same recipient within 60s
+    const isDuplicate = this.lastSentTimestamps.some(
+      e => e.to.trim().toLowerCase() === options.to.trim().toLowerCase() && (now - e.time) < 60000
+    );
+    if (isDuplicate) {
+      console.warn(`[EmailService] Blocked duplicate email send to ${options.to} within 60s cooldown window.`);
+      return {
+        success: false,
+        code: 'DUPLICATE_SUPPRESSED',
+        message: `Duplicate email suppressed: An email was already sent to ${options.to} within the last 60 seconds.`,
+      };
+    }
+
     try {
       const mailOptions: nodemailer.SendMailOptions = {
         from: fromAddress,
@@ -238,6 +256,7 @@ export class EmailService {
       }
 
       const info = await transporter.sendMail(mailOptions);
+      this.lastSentTimestamps.push({ to: options.to, subject: options.subject, time: now });
       console.log('[EmailService] Email sent successfully:', info.messageId);
       return {
         success: true,
