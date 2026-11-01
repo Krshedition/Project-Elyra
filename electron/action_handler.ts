@@ -12,6 +12,70 @@ function expandEnvVars(filepath: string | undefined): string | undefined {
   return filepath.replace(/%([^%]+)%/g, (_, n) => process.env[n] || '');
 }
 
+async function sendNativeKey(appName: string | undefined, rawKey: string): Promise<boolean> {
+  const normKey = (rawKey || '').toLowerCase().trim();
+
+  // Map hotkeys to WScript.Shell SendKeys format
+  let sendKeyStr = '';
+  if (normKey === 'ctrl+v' || normKey === 'control+v' || normKey === 'paste' || normKey === 'ctrl v') {
+    sendKeyStr = '^v';
+  } else if (normKey === 'ctrl+c' || normKey === 'control+c' || normKey === 'copy' || normKey === 'ctrl c') {
+    sendKeyStr = '^c';
+  } else if (normKey === 'ctrl+a' || normKey === 'control+a' || normKey === 'select_all' || normKey === 'ctrl a') {
+    sendKeyStr = '^a';
+  } else if (normKey === 'ctrl+s' || normKey === 'control+s' || normKey === 'save') {
+    sendKeyStr = '^s';
+  } else if (normKey === 'ctrl+z' || normKey === 'control+z' || normKey === 'undo') {
+    sendKeyStr = '^z';
+  } else if (normKey === 'ctrl+x' || normKey === 'control+x') {
+    sendKeyStr = '^x';
+  } else if (normKey === 'ctrl+w' || normKey === 'control+w') {
+    sendKeyStr = '^w';
+  } else if (normKey === 'alt+f4' || normKey === 'alt f4') {
+    sendKeyStr = '%{F4}';
+  } else if (normKey === 'enter' || normKey === 'return') {
+    sendKeyStr = '{ENTER}';
+  } else if (normKey === 'tab') {
+    sendKeyStr = '{TAB}';
+  } else if (normKey === 'escape' || normKey === 'esc') {
+    sendKeyStr = '{ESC}';
+  } else if (normKey === 'backspace' || normKey === 'bs') {
+    sendKeyStr = '{BS}';
+  } else if (normKey === 'delete' || normKey === 'del') {
+    sendKeyStr = '{DEL}';
+  } else if (normKey === 'space') {
+    sendKeyStr = ' ';
+  } else if (normKey.startsWith('ctrl+') || normKey.startsWith('control+')) {
+    const letter = normKey.split('+')[1]?.trim() || '';
+    sendKeyStr = `^${letter}`;
+  } else if (normKey.startsWith('alt+')) {
+    const letter = normKey.split('+')[1]?.trim() || '';
+    sendKeyStr = `%{${letter.toUpperCase()}}`;
+  } else {
+    sendKeyStr = rawKey;
+  }
+
+  try {
+    const targetApp = (appName || '').trim().replace('.exe', '');
+    let activateScript = '';
+    if (targetApp) {
+      // Find process by name and activate using PID for 100% reliable focus on Windows 11
+      activateScript = `$p = Get-Process -Name '${targetApp}' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($p) { $w.AppActivate($p.Id) } else { $w.AppActivate('${targetApp}') }; Start-Sleep -Milliseconds 250; `;
+    }
+
+    const psCmd = `powershell -NoProfile -NonInteractive -Command "$w = New-Object -ComObject WScript.Shell; ${activateScript}$w.SendKeys('${sendKeyStr}')"`;
+    await execAsync(psCmd);
+    return true;
+  } catch (err: any) {
+    console.warn('[ActionHandler] PowerShell SendKeys failed, falling back to C++ addon:', err.message);
+    if (automation && typeof automation.pressKey === 'function') {
+      return await automation.pressKey(appName || "", rawKey);
+    }
+    return false;
+  }
+}
+
+
 import fs from 'node:fs';
 
 // Native require with fallback paths for production packaging
@@ -88,18 +152,45 @@ export async function handleDesktopAction(actionName: string, args: any) {
 
     case 'type_text':
       if (!args.appName || !args.text) {
-        throw new Error("appName and text are strictly required by the Native C++ Addon to type text");
+        throw new Error("appName and text are strictly required to type text");
       }
-      const p = typeQueue.then(() => automation.injectText(args.appName, args.text));
+      const p = typeQueue.then(async () => {
+        const textToType = args.text;
+        const app = args.appName.trim().replace('.exe', '');
+        
+        let injectSuccess = false;
+        if (textToType.length < 50 && automation && typeof automation.injectText === 'function') {
+          try {
+            injectSuccess = await automation.injectText(app, textToType);
+          } catch (e) {
+            injectSuccess = false;
+          }
+        }
+
+        // If injectText returned false (e.g. Windows 11 Notepad tab title) or text is long, use clipboard paste
+        if (!injectSuccess) {
+          try {
+            if (automation && typeof automation.writeClipboard === 'function') {
+              await automation.writeClipboard(textToType);
+            }
+            await sendNativeKey(app, 'ctrl+v');
+            return true;
+          } catch (e: any) {
+            console.error('[ActionHandler] Clipboard fallback paste failed:', e);
+            throw new Error(`Failed to type text into ${app}: ${e.message}`);
+          }
+        }
+        return true;
+      });
       // Ensure the global queue always recovers even if this specific typing action fails
       typeQueue = p.catch(() => {});
       return p;
 
     case 'press_key':
       if (!args.key) {
-        throw new Error("key is required by the Native C++ Addon to press key");
+        throw new Error("key is required to press key");
       }
-      return await automation.pressKey(args.appName || "", args.key);
+      return await sendNativeKey(args.appName || "", args.key);
 
     case 'system_action':
       if (args.action === 'shutdown' || args.action === 'restart') {

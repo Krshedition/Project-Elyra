@@ -1027,6 +1027,68 @@ export function useLiveSession() {
               // CRITICAL GATE: Prevent spontaneous tool execution without explicit user voice command,
               // UNLESS a planned multi-step task is currently active!
               const hasActiveTask = tasksRef.current.some(t => t.status === 'in_progress' || t.status === 'healing');
+
+              // AUTO-TASK ENGINE: Automatically create and track structured tasks for user commands
+              if (!hasActiveTask && data.toolCall.functionCalls.length > 0 && !data.toolCall.functionCalls.some((c: any) => c.name === 'plan_workflow_task')) {
+                const speech = (pendingUserDraftRef.current || '').trim();
+                const firstCall = data.toolCall.functionCalls[0];
+                let taskTitle = 'Desktop & Web Automation';
+                let sourceApp = 'Desktop';
+                let targetApp = 'Target App';
+                let autoSteps: WorkflowSubStep[] = [];
+                const nowClock = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const speechLower = speech.toLowerCase();
+
+                if (speechLower.includes('notepad') || (firstCall.name === 'desktopAction' && (firstCall.args as any)?.appName === 'notepad')) {
+                  taskTitle = 'Notepad: Launch & Inject Content';
+                  sourceApp = 'Desktop';
+                  targetApp = 'Notepad';
+                  autoSteps = [
+                    { id: 's1', stepNumber: 1, title: 'Launch Notepad application', subProblem: 'Open Notepad on Windows desktop', status: 'in_progress', actionName: 'open_app', timestamp: nowClock },
+                    { id: 's2', stepNumber: 2, title: 'Compose & inject requested text', subProblem: 'Write content into Notepad window', status: 'pending', actionName: 'type_text' },
+                    { id: 's3', stepNumber: 3, title: 'Verify document presentation', subProblem: 'Ensure text is displayed on screen', status: 'pending', actionName: 'verify_status' }
+                  ];
+                } else if (speechLower.includes('youtube') || (firstCall.name === 'browser_navigate' && String((firstCall.args as any)?.url || '').includes('youtube'))) {
+                  taskTitle = 'YouTube: Search, Play & Mute Video';
+                  sourceApp = 'Brave Browser';
+                  targetApp = 'YouTube Web';
+                  autoSteps = [
+                    { id: 's1', stepNumber: 1, title: 'Navigate to YouTube', subProblem: 'Open YouTube in Brave browser via CDP', status: 'in_progress', actionName: 'browser_navigate', timestamp: nowClock },
+                    { id: 's2', stepNumber: 2, title: 'Search for requested song', subProblem: 'Type query into search input and submit', status: 'pending', actionName: 'browser_type_input' },
+                    { id: 's3', stepNumber: 3, title: 'Play matching video', subProblem: 'Click first video result to start playback', status: 'pending', actionName: 'browser_click_video' },
+                    { id: 's4', stepNumber: 4, title: 'Mute audio playback', subProblem: 'Mute playing video stream', status: 'pending', actionName: 'set_volume' }
+                  ];
+                } else if (speech) {
+                  taskTitle = speech.length > 50 ? speech.slice(0, 47) + '...' : speech;
+                  autoSteps = [
+                    { id: 's1', stepNumber: 1, title: 'Initialize requested task', subProblem: `Start execution: ${speech}`, status: 'in_progress', actionName: firstCall.name, timestamp: nowClock },
+                    { id: 's2', stepNumber: 2, title: 'Execute automated operations', subProblem: 'Perform sequential browser and OS actions', status: 'pending', actionName: 'action_step' },
+                    { id: 's3', stepNumber: 3, title: 'Verify outcome & confirm', subProblem: 'Verify completed state and confirm verbally', status: 'pending', actionName: 'verify_status' }
+                  ];
+                }
+
+                if (autoSteps.length > 0) {
+                  const autoTask: AutomatedTask = {
+                    id: 'task_' + Date.now(),
+                    title: taskTitle,
+                    goal: speech || taskTitle,
+                    category: 'cross_app',
+                    sourceApp,
+                    targetApp,
+                    status: 'in_progress',
+                    currentStepIndex: 0,
+                    steps: autoSteps,
+                    startedAt: nowClock,
+                    logs: [
+                      `[${nowClock}] [TaskEngine] Auto-detected task: "${taskTitle}"`,
+                      `[${nowClock}] [TaskEngine] Decomposed into ${autoSteps.length} atomic sub-problems.`,
+                      `[${nowClock}] [TaskEngine] Starting Sub-problem 1: ${autoSteps[0].title}`
+                    ]
+                  };
+                  tasksRef.current = [autoTask, ...tasksRef.current];
+                  setTasks(tasksRef.current);
+                }
+              }
               if (!userHasSpokenRef.current && !hasActiveTask) {
                 console.warn('[ToolGate] Spontaneous tool call blocked: User has not issued a voice command.');
                 for (const call of data.toolCall.functionCalls) {
