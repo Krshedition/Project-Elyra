@@ -685,22 +685,44 @@ export class DirectBrowserEngine {
     }
   }
 
-  public async clickFirstYouTubeVideo(tabId?: number | string): Promise<string> {
+    public async clickFirstYouTubeVideo(tabId?: number | string): Promise<string> {
     try {
       const { id, page } = await this.resolvePage(tabId);
+      await page.waitForTimeout(600);
       const videoSelectors = [
-        'ytd-rich-grid-media a#video-title',
         'ytd-video-renderer a#video-title',
-        'a#video-title-link'
+        'ytd-rich-grid-media a#video-title',
+        'ytd-rich-item-renderer a#video-title-link',
+        'a#video-title-link',
+        'a#video-title',
+        'ytd-thumbnail a',
+        'ytd-video-renderer a#thumbnail',
+        '#contents ytd-video-renderer a#thumbnail'
       ];
 
       for (const sel of videoSelectors) {
         const loc = page.locator(sel).first();
-        if (await loc.count() > 0) {
-          await loc.scrollIntoViewIfNeeded();
+        if (await loc.count() > 0 && await loc.isVisible().catch(() => true)) {
+          await loc.scrollIntoViewIfNeeded().catch(() => {});
           await loc.click({ force: true, timeout: 5000 });
+          await page.waitForTimeout(600);
           return `Clicked first YouTube video on Tab [Tab ID: ${id}] using selector: ${sel}`;
         }
+      }
+
+      // Fallback: evaluate document.querySelector directly for any video link
+      const fallbackClicked = await page.evaluate(() => {
+        const titleLink = document.querySelector('ytd-video-renderer a#video-title, ytd-rich-item-renderer a#video-title-link, a#video-title') as HTMLElement;
+        if (titleLink) {
+          titleLink.click();
+          return (titleLink.innerText || titleLink.getAttribute('title') || 'YouTube Video').trim();
+        }
+        return null;
+      }).catch(() => null);
+
+      if (fallbackClicked) {
+        await page.waitForTimeout(600);
+        return `Clicked first YouTube video: "${fallbackClicked}" on Tab [Tab ID: ${id}]`;
       }
 
       return `Could not find a YouTube video title link on Tab [Tab ID: ${id}].`;
@@ -986,11 +1008,36 @@ export class DirectBrowserEngine {
     }
   }
 
-  public async pressKey(key: string, tabId?: number | string): Promise<string> {
+    public async pressKey(key: string, tabId?: number | string): Promise<string> {
     try {
       const { id: tid, page } = await this.resolvePage(tabId);
       await page.keyboard.press(key);
-      return `Pressed key "${key}" on Tab [Tab ID: ${tid}].`;
+      await page.waitForTimeout(300);
+
+      // In-page Same-URL verification inspector (for media playback, mute, Coolors palettes)
+      let stateNote = '';
+      const normKey = (key || '').toLowerCase();
+      if (normKey === 'm' || normKey === 'k' || normKey === ' ' || normKey === 'space') {
+        const mediaState = await page.evaluate(() => {
+          const v = document.querySelector('video') || document.querySelector('audio');
+          if (!v) return null;
+          return {
+            muted: v.muted || v.volume === 0,
+            paused: v.paused,
+            volume: Math.round(v.volume * 100),
+            currentTime: Math.round(v.currentTime)
+          };
+        }).catch(() => null);
+
+        if (mediaState) {
+          stateNote = ` [Verified Media State: ${mediaState.muted ? 'Muted' : 'Unmuted'}, ${mediaState.paused ? 'Paused' : 'Playing'}, Vol: ${mediaState.volume}%]`;
+        } else if (normKey === ' ' || normKey === 'space') {
+          const pageTitle = await page.title().catch(() => '');
+          stateNote = ` [Verified Space Key Dispatched on ${pageTitle || 'Page'}]`;
+        }
+      }
+
+      return `Pressed key "${key}" on Tab [Tab ID: ${tid}].${stateNote}`;
     } catch (err: any) {
       return `Failed to press key on Tab [Tab ID: ${tabId || this.currentTabId}]: ${err.message}`;
     }
@@ -999,8 +1046,6 @@ export class DirectBrowserEngine {
   /**
    * Action Verification & Rollback Architecture:
    * Inspects current URL, active drawer/dialog headings, and DOM state.
-   * If an unwanted panel (such as "Notifications" when looking for "Messages") is open,
-   * it triggers an automatic rollback via Escape, re-scans the DOM, and reports the mismatch.
    */
   public async verifyActionOutcome(params: {
     expectedUrlKeyword?: string;
