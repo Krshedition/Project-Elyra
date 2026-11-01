@@ -54,7 +54,9 @@ If you don't understand, look it up on the internet first.
 'get_focused_window'. If asked to shut down, restart, or lock the PC, use 'system_action'. You can also use 
 'get_system_info' to proactively check RAM usage, Battery Life, and CPU hardware details.
   For 'file_system_action', you can 'create_dir', 'delete', 'move', 'copy', 'read', 'write', or 'overwrite'.
-  CRITICAL: If a file system action requires confirmation (the tool response will tell you), you MUST verbally ask the user for confirmation (e.g., "I'm about to delete the file, confirm?"). Only call the tool again with confirmed=true AFTER the user says yes.
+  CRITICAL SAFETY RULES (PC SHUTDOWN & FILE INTEGRITY):
+  - SYSTEM SHUTDOWN / RESTART: NEVER EVER initiate PC shutdown or restart ('system_action' with 'shutdown' or 'restart') spontaneously, accidentally, or during general testing. You are strictly forbidden from calling this tool unless Krish gives an explicit and direct voice command to shut down or restart his PC (e.g., "PC band kar do" or "Shut down the PC"). Even when requested, a native OS confirmation dialog will pop up on Krish's desktop.
+  - FILE DELETION & OVERWRITE: You are STRICTLY forbidden from deleting or overwriting any file or directory ('file_system_action' with 'delete' or 'overwrite') without first asking Krish verbally for confirmation in Hindi (e.g., "Kya main yeh file delete kar doon?"). Only call the tool after Krish explicitly confirms. A native desktop dialog box will also require physical confirmation.
 
   7. HEADLESS BACKGROUND AUTOMATION (SILENT, NO GUI):
   Use these tools whenever Krish asks for tasks that do NOT require opening or seeing a browser window:
@@ -1138,6 +1140,40 @@ export function useLiveSession() {
                       }
                     });
                     continue;
+                  }
+                }
+
+                // STRICT SAFETY GATE: Prevent spontaneous shutdown or restart of PC
+                if (call.name === 'desktopAction') {
+                  const dArgs = (call.args || {}) as any;
+                  if (dArgs.actionName === 'system_action' && (dArgs.action === 'shutdown' || dArgs.action === 'restart')) {
+                    const isExplicitShutdown = /\b(shutdown|shut down|power off|turn off|band kar|restart|reboot)\b/i.test(lastUserSpeech);
+                    if (!isExplicitShutdown) {
+                      console.warn(`[SafetyGate] Blocked spontaneous PC ${dArgs.action}. User speech was: "${pendingUserDraftRef.current}"`);
+                      responses.push({
+                        id: call.id || "1",
+                        name: call.name,
+                        response: {
+                          error: `Safety Refusal: Krish did not give an explicit voice command to ${dArgs.action} the PC. Spontaneous system shutdown/restart is strictly prohibited.`
+                        }
+                      });
+                      continue;
+                    }
+                  }
+
+                  if (dArgs.actionName === 'file_system_action' && (dArgs.action === 'delete' || dArgs.action === 'overwrite')) {
+                    const isExplicitFileDelete = /\b(delete|remove|hata|mita|overwrite|replace)\b/i.test(lastUserSpeech);
+                    if (!isExplicitFileDelete && !dArgs.confirmed) {
+                      console.warn(`[SafetyGate] Blocked unconfirmed file ${dArgs.action}. User speech was: "${pendingUserDraftRef.current}"`);
+                      responses.push({
+                        id: call.id || "1",
+                        name: call.name,
+                        response: {
+                          error: `Safety Refusal: You must verbally ask Krish for permission in Hindi before deleting or overwriting any file. Do not call this tool until Krish explicitly confirms.`
+                        }
+                      });
+                      continue;
+                    }
                   }
                 }
 

@@ -14,7 +14,7 @@ export class DirectBrowserEngine {
   private currentTabId: number = 1;
   private elementMemory: Map<number, any[]> = new Map();
 
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): DirectBrowserEngine {
     if (!DirectBrowserEngine.instance) {
@@ -32,13 +32,13 @@ export class DirectBrowserEngine {
         await this.syncTabs();
       } catch (err) {
         console.log('CDP connection failed. Launching Brave with remote debugging...');
-        
+
         // Check both common install locations
         const SYSTEM_BRAVE = 'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe';
         const LOCAL_BRAVE = path.join(process.env.LOCALAPPDATA || '', 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe');
-        
+
         let targetPath = fs.existsSync(SYSTEM_BRAVE) ? SYSTEM_BRAVE : (fs.existsSync(LOCAL_BRAVE) ? LOCAL_BRAVE : null);
-        
+
         if (targetPath) {
           // Check if Brave is already running without remote debugging enabled
           const { execSync } = require('child_process');
@@ -48,19 +48,19 @@ export class DirectBrowserEngine {
             if (tasklist.toLowerCase().includes('brave.exe')) {
               isRunning = true;
             }
-          } catch (e) {}
+          } catch (e) { }
 
           if (isRunning) {
             console.log('Brave is currently running without remote debugging. Gracefully restarting with remote debugging enabled...');
             try {
               execSync('taskkill /IM brave.exe /F', { stdio: 'ignore' });
               await new Promise(r => setTimeout(r, 1000));
-            } catch (e) {}
+            } catch (e) { }
           }
 
           // Launch user's ACTUAL Brave app with remote debugging and session restore (no sandbox profile!)
           exec(`"${targetPath}" --remote-debugging-port=9222 --restore-last-session`);
-          
+
           // Poll port 9222 until ready (up to 8 seconds, checking every 300ms)
           let connected = false;
           for (let i = 0; i < 26; i++) {
@@ -70,14 +70,14 @@ export class DirectBrowserEngine {
                 connected = true;
                 break;
               }
-            } catch (e) {}
+            } catch (e) { }
             await new Promise(r => setTimeout(r, 300));
           }
 
           if (!connected) {
             throw new Error("Failed to connect to Brave CDP after launching.");
           }
-          
+
           this.browser = await chromium.connectOverCDP('http://localhost:9222');
           this.context = this.browser.contexts()[0];
           await this.syncTabs();
@@ -143,7 +143,7 @@ export class DirectBrowserEngine {
 
   public async syncTabs(): Promise<{ id: number; page: Page }[]> {
     const webPages = await this.getWebPages();
-    
+
     // Prune closed or missing pages from tabIdMap
     for (const [id, page] of Array.from(this.tabIdMap.entries())) {
       if (page.isClosed() || !webPages.includes(page)) {
@@ -208,25 +208,25 @@ export class DirectBrowserEngine {
         if (!page.isClosed()) {
           this.currentTabId = parsedNum;
           this.page = page;
-          try { await page.bringToFront(); } catch (e) {}
+          try { await page.bringToFront(); } catch (e) { }
           return { id: parsedNum, page };
         }
       }
-      
+
       // Also allow fuzzy match by title or url if target string is not a pure number
       const targetStr = String(tabId).toLowerCase().trim();
       for (const t of tabs) {
         let title = '';
-        try { title = (await t.page.title()).toLowerCase(); } catch (e) {}
+        try { title = (await t.page.title()).toLowerCase(); } catch (e) { }
         const url = t.page.url().toLowerCase();
         if (title.includes(targetStr) || url.includes(targetStr)) {
           this.currentTabId = t.id;
           this.page = t.page;
-          try { await t.page.bringToFront(); } catch (e) {}
+          try { await t.page.bringToFront(); } catch (e) { }
           return { id: t.id, page: t.page };
         }
       }
-      
+
       throw new Error(`Tab ID ${tabId} not found. Currently open tabs: ${tabs.map(t => `[Tab ID: ${t.id}]`).join(', ')}`);
     }
 
@@ -238,7 +238,7 @@ export class DirectBrowserEngine {
     }
 
     this.page = targetTab.page;
-    try { await targetTab.page.bringToFront(); } catch (e) {}
+    try { await targetTab.page.bringToFront(); } catch (e) { }
     return { id: targetTab.id, page: targetTab.page };
   }
 
@@ -270,7 +270,7 @@ export class DirectBrowserEngine {
   public async dismissOverlays(tabId?: number | string): Promise<{ dismissed: boolean; detail?: string }> {
     try {
       const { page } = await this.resolvePage(tabId);
-      
+
       const dismissSelectors = [
         '#onetrust-accept-btn-handler',
         '#cookie-accept',
@@ -353,7 +353,7 @@ export class DirectBrowserEngine {
         }
         // Non-blocking proactive overlay dismissal check after navigation
         setTimeout(() => {
-          this.dismissOverlays().catch(() => {});
+          this.dismissOverlays().catch(() => { });
         }, 1000);
       };
 
@@ -367,7 +367,7 @@ export class DirectBrowserEngine {
         this.currentTabId = id;
         this.page = page;
         let title = 'Tab';
-        try { title = await page.title(); } catch (e) {}
+        try { title = await page.title(); } catch (e) { }
         return `Opened new Tab [Tab ID: ${id}]: "${title}" [${finalUrl}]`;
       }
 
@@ -377,7 +377,7 @@ export class DirectBrowserEngine {
         await gotoWithRecovery(page, finalUrl);
         await page.bringToFront();
         let title = 'Tab';
-        try { title = await page.title(); } catch (e) {}
+        try { title = await page.title(); } catch (e) { }
         return `Navigated Tab [Tab ID: ${id}]: "${title}" to ${finalUrl}`;
       }
 
@@ -389,7 +389,7 @@ export class DirectBrowserEngine {
           this.page = t.page;
           await this.page.bringToFront();
           let title = 'Tab';
-          try { title = await t.page.title(); } catch (e) {}
+          try { title = await t.page.title(); } catch (e) { }
           return `Tab [Tab ID: ${t.id}] ("${title}") is already open. Switched to it instead of overwriting.`;
         }
       }
@@ -398,7 +398,7 @@ export class DirectBrowserEngine {
       await gotoWithRecovery(page, finalUrl);
       await page.bringToFront();
       let title = 'Tab';
-      try { title = await page.title(); } catch (e) {}
+      try { title = await page.title(); } catch (e) { }
       return `Navigated Tab [Tab ID: ${id}]: "${title}" to ${finalUrl}`;
     } catch (err: any) {
       return `Failed to navigate: ${err.message}`;
@@ -421,7 +421,7 @@ export class DirectBrowserEngine {
             this.page = t.page;
             await this.page.bringToFront();
             let title = 'Tab';
-            try { title = await t.page.title(); } catch (e) {}
+            try { title = await t.page.title(); } catch (e) { }
             return `Tab [Tab ID: ${t.id}] ("${title}") was already open. Switched to it instead of duplicating.`;
           }
         }
@@ -435,7 +435,7 @@ export class DirectBrowserEngine {
         this.currentTabId = id;
         this.page = page;
         let title = 'Tab';
-        try { title = await page.title(); } catch (e) {}
+        try { title = await page.title(); } catch (e) { }
         return `Opened new Tab [Tab ID: ${id}]: "${title}" [${finalUrl}]`;
       } else {
         const context = await this.ensureContext();
@@ -462,7 +462,7 @@ export class DirectBrowserEngine {
       const lines: string[] = ["Currently open browser tabs:"];
       for (const t of tabs) {
         let title = 'Untitled';
-        try { title = await t.page.title(); } catch (e) {}
+        try { title = await t.page.title(); } catch (e) { }
         const url = t.page.url();
         const isActive = t.id === this.currentTabId;
         lines.push(`- [Tab ID: ${t.id}] "${title || 'Untitled'}" [${url}]${isActive ? ' (ACTIVE)' : ''}`);
@@ -478,7 +478,7 @@ export class DirectBrowserEngine {
     try {
       const { id, page } = await this.resolvePage(target);
       let title = 'Tab';
-      try { title = await page.title(); } catch (e) {}
+      try { title = await page.title(); } catch (e) { }
       return `Switched to Tab [Tab ID: ${id}]: "${title}" [${page.url()}].`;
     } catch (err: any) {
       return `Failed to switch tab: ${err.message}`;
@@ -489,7 +489,7 @@ export class DirectBrowserEngine {
     try {
       const { id, page } = await this.resolvePage(tabId);
       let selfHealedNote = '';
-      
+
       let loc = page.locator(`text="${text}"`).first();
       let count = await loc.count();
 
@@ -561,7 +561,7 @@ export class DirectBrowserEngine {
           await page.waitForTimeout(300);
           selfHealedNote += `[Auto-Dismissed Stickers Drawer via Escape] `;
         }
-      } catch {}
+      } catch { }
 
       const currentUrl = page.url().toLowerCase();
       const inDirectThread = currentUrl.includes('/direct/t/') || currentUrl.includes('/messages/t/') || currentUrl.includes('/t/');
@@ -641,7 +641,7 @@ export class DirectBrowserEngine {
         await targetLocator.evaluate((el: HTMLInputElement) => {
           el.value = '';
           el.blur();
-        }).catch(() => {});
+        }).catch(() => { });
 
         const trueReply = page.locator('div[role="textbox"][contenteditable="true"], div[aria-label*="Message" i], div[contenteditable="true"]:not([placeholder*="Search" i]), footer [contenteditable="true"]').first();
         if (await trueReply.count() > 0 && await trueReply.isVisible()) {
@@ -731,27 +731,27 @@ export class DirectBrowserEngine {
   public async analyzePage(tabId?: number | string): Promise<string> {
     try {
       const { id, page } = await this.resolvePage(tabId);
-      
+
       const elementsMap = await page.evaluate(() => {
         document.querySelectorAll('.elyra-tag-overlay').forEach(e => e.remove());
-        
+
         let counter = 1;
         const results: any[] = [];
-        
+
         const elements = document.querySelectorAll('a, button, input, textarea, select, [role="button"], [role="link"], [role="textbox"], [contenteditable="true"], [tabindex]:not([tabindex="-1"])');
-        
+
         elements.forEach((el) => {
           if (counter > 200) return;
 
           const rect = el.getBoundingClientRect();
           if (rect.width === 0 || rect.height === 0 || rect.top < 0 || rect.left < 0) return;
-          
+
           const style = window.getComputedStyle(el);
           if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return;
-          
+
           const eid = counter++;
           el.setAttribute('data-elyra-id', eid.toString());
-          
+
           const overlay = document.createElement('div');
           overlay.className = 'elyra-tag-overlay';
           overlay.style.position = 'absolute';
@@ -766,10 +766,10 @@ export class DirectBrowserEngine {
           overlay.style.pointerEvents = 'none';
           overlay.textContent = `[${eid}]`;
           document.body.appendChild(overlay);
-          
+
           let text = (el as HTMLElement).innerText || el.getAttribute('aria-label') || el.getAttribute('title') || '';
           text = text.substring(0, 30).replace(/\n/g, ' ').trim();
-          
+
           results.push({
             id: eid,
             tag: el.tagName.toLowerCase(),
@@ -779,15 +779,15 @@ export class DirectBrowserEngine {
             text
           });
         });
-        
+
         return results;
       });
-      
+
       // Store in element memory for self-healing recoveries
       this.elementMemory.set(id, elementsMap);
 
       if (elementsMap.length === 0) return `No visible interactive elements found on Tab [Tab ID: ${id}].`;
-      
+
       const chunks = elementsMap.map((e: any) => {
         let desc = `[${e.id}]: ${e.tag}`;
         if (e.type) desc += `(type=${e.type})`;
@@ -796,7 +796,7 @@ export class DirectBrowserEngine {
         if (e.text) desc += ` - "${e.text}"`;
         return desc;
       });
-      
+
       return `Tab [Tab ID: ${id}] interactive elements: ${chunks.join(', ')}`;
     } catch (err: any) {
       return `Failed to analyze page on Tab [Tab ID: ${tabId || this.currentTabId}]: ${err.message}`;
@@ -889,7 +889,7 @@ export class DirectBrowserEngine {
         } else {
           outcomeNote = ` [State Notice: URL: ${postUrl}]`;
         }
-      } catch {}
+      } catch { }
 
       return `${selfHealedNote}Clicked element [${id}] on Tab [Tab ID: ${tid}].${outcomeNote}`;
     } catch (err: any) {
@@ -897,7 +897,7 @@ export class DirectBrowserEngine {
     }
   }
 
-  public async fillForm(fields: {id: number, text: string}[], tabId?: number | string): Promise<string> {
+  public async fillForm(fields: { id: number, text: string }[], tabId?: number | string): Promise<string> {
     try {
       const { id: tid, page } = await this.resolvePage(tabId);
       const results = [];
@@ -948,7 +948,7 @@ export class DirectBrowserEngine {
           const targetLower = targetStr.toLowerCase();
           for (const t of tabs) {
             let title = '';
-            try { title = (await t.page.title()).toLowerCase(); } catch (e) {}
+            try { title = (await t.page.title()).toLowerCase(); } catch (e) { }
             const url = t.page.url().toLowerCase();
             if (title.includes(targetLower) || url.includes(targetLower)) {
               tabToClose = t;
@@ -964,7 +964,7 @@ export class DirectBrowserEngine {
 
       const closedId = tabToClose.id;
       let title = 'Tab';
-      try { title = await tabToClose.page.title(); } catch (e) {}
+      try { title = await tabToClose.page.title(); } catch (e) { }
       await tabToClose.page.close();
       this.tabIdMap.delete(closedId);
 
@@ -975,7 +975,7 @@ export class DirectBrowserEngine {
         this.page = next.page;
         await next.page.bringToFront();
         let nextTitle = '';
-        try { nextTitle = await next.page.title(); } catch (e) {}
+        try { nextTitle = await next.page.title(); } catch (e) { }
         return `Closed Tab [Tab ID: ${closedId}] ("${title}"). Active tab is now Tab [Tab ID: ${next.id}] ("${nextTitle}").`;
       } else {
         this.page = null;
@@ -1024,7 +1024,7 @@ export class DirectBrowserEngine {
 
       const currentUrl = page.url();
       let currentTitle = '';
-      try { currentTitle = await page.title(); } catch {}
+      try { currentTitle = await page.title(); } catch { }
 
       // Detect any active modal, drawer, or sidebar panel heading
       const detectedDrawer = await page.evaluate(() => {

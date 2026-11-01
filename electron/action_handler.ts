@@ -3,6 +3,8 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 
+import { dialog, BrowserWindow } from 'electron';
+
 const execAsync = promisify(exec);
 
 function expandEnvVars(filepath: string | undefined): string | undefined {
@@ -100,6 +102,23 @@ export async function handleDesktopAction(actionName: string, args: any) {
       return await automation.pressKey(args.appName || "", args.key);
 
     case 'system_action':
+      if (args.action === 'shutdown' || args.action === 'restart') {
+        const focusedWin = BrowserWindow.getFocusedWindow();
+        const choice = dialog.showMessageBoxSync(focusedWin || undefined as any, {
+          type: 'warning',
+          title: 'Project Elyra - Security Confirmation',
+          message: `Elyra has requested to ${args.action.toUpperCase()} your PC.`,
+          detail: `Action: ${args.action.toUpperCase()}\nInitiated by AI agent.\n\nDo you want to proceed with this system action? Click "Cancel" to abort.`,
+          buttons: ['Cancel', `Confirm ${args.action.toUpperCase()}`],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true
+        });
+
+        if (choice !== 1) {
+          throw new Error(`Security Refusal: User cancelled ${args.action}. Execution aborted.`);
+        }
+      }
       return await automation.systemAction(args.action);
 
     case 'get_running_processes':
@@ -155,11 +174,21 @@ export async function handleDesktopAction(actionName: string, args: any) {
       const expandedDest = expandEnvVars(args.dest);
 
       if (args.action === 'delete' || args.action === 'overwrite') {
-        if (!args.confirmed) {
-          return { 
-            requiresConfirmation: true, 
-            message: `I'm about to ${args.action} ${expandedPath || expandedDest}. Say confirm to proceed.` 
-          };
+        const targetDesc = expandedPath || expandedDest || 'target file/folder';
+        const focusedWin = BrowserWindow.getFocusedWindow();
+        const choice = dialog.showMessageBoxSync(focusedWin || undefined as any, {
+          type: 'warning',
+          title: 'Project Elyra - File Deletion Guard',
+          message: `Elyra has requested to ${args.action.toUpperCase()} a file or directory.`,
+          detail: `Target: ${targetDesc}\nAction: ${args.action.toUpperCase()}\n\nDo you want to permanently ${args.action} this item? Click "Cancel" to abort.`,
+          buttons: ['Cancel', `Confirm ${args.action.toUpperCase()}`],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true
+        });
+
+        if (choice !== 1) {
+          throw new Error(`Security Refusal: User cancelled ${args.action} on "${targetDesc}". Execution aborted.`);
         }
       }
       
