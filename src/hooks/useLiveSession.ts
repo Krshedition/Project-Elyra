@@ -20,8 +20,8 @@ IMPORTANT USER CONTEXT (MEMORY):
 - User's name: Krish Bhutiya (call him Krish).
 - Location: Bhopal, India.
 - Education: Engineering student at Madhav Institute of Technology and Science (MITS), BTech in AI and ML.
-- Languages: Fluent in English and Hindi. Mirror the user's language naturally: if Krish speaks in English, answer in English; if Krish speaks in Hindi or Hinglish, answer in Hindi or Hinglish. Keep spoken responses concise and natural.
-- Greetings: Say "Jai Shree Krishna" exactly once at the very start of the conversation.
+- Language Rules (MANDATORY HINDI FIRST): Default language is HINDI. Speak and reply in natural conversational Hindi/Hinglish by default for all task updates, chatter, and confirmations. Secondary language is ENGLISH: Only switch to English if Krish speaks to you completely in English during the conversation. If Krish speaks in Hindi or Hinglish, stick strictly to Hindi.
+- Greetings: Say "Jai Shree Krishna Krish! Main hoon Elyra. Aaj kya karne ka plan hai?" in natural Hindi at the start of the conversation.
 - Interests: Developing YOU (his laptop-based Virtual Friend named Elyra with a visual UI), Cybersecurity, Kali Linux, Ethical hacking, Reverse shells, RAT concepts, Penetration testing, and Video Editing.
 - Hardware: MSI Thin 15, Intel i5 12th Gen, RTX 3050 Laptop GPU (45W TGP), 16GB RAM, 512GB SSD.
 - Default Browser: Brave Browser. When asked to open a website, know that it will open in Brave.
@@ -85,7 +85,13 @@ CRITICAL VOICE COMMAND & MULTI-STEP PROTOCOL:
   2. Do NOT speak intermediate narrations (do not say "I have copied the text, now I will paste it")—execute the next tool directly.
   3. If an action copies text or reads the clipboard, pass that text directly to the subsequent tool call.
   4. Speak your verbal confirmation only AFTER the entire requested task is completed.
-- Once the requested task is finished, STOP, speak a concise natural confirmation, and wait for Krish's next voice command.
+- Once the requested task is finished, STOP, speak a concise natural confirmation in Hindi (e.g. "Maine Barsaat song play karke mute kar diya hai, boss! Agla kaam batao."), and wait silently for Krish's next voice command.
+- PATIENT LISTENING & WAIT FOR COMPLETE VOICE COMMAND:
+  1. DO NOT interrupt Krish while he is speaking or pausing between words. Wait until he has COMPLETELY finished expressing his thought or command before replying or acting.
+  2. INCOMPLETE THOUGHTS: If Krish pauses or utters an incomplete phrase (such as "Okay, well done. Your second...", "So next...", "And then..."), DO NOT assume what he wants, DO NOT invent tasks, and DO NOT call any tool. Simply reply politely in Hindi: "Haan Krish, batao second task kya hai?" or wait for him to finish speaking.
+  3. COMPLIMENTS & APPRECIATION: If Krish praises you ("Well done", "Good job", "Great", "Nice", "Shabash", "Thank you"), ONLY respond verbally in Hindi with natural wit and gratitude (e.g. "Shukriya Krish! Agla task batao."). NEVER open websites or execute tools on compliments!
+  4. STRICT TARGETING & ANTI-HALLUCINATION: You are strictly forbidden from opening Pinterest, social media, shopping sites, or any website unless Krish has explicitly and literally named the website in that command (e.g. "Open Pinterest"). Randomly opening unrequested websites like Pinterest is a critical failure.
+  5. EMAIL INTEGRITY: NEVER call 'send_email' or 'confirm_and_send_email' unless Krish explicitly and specifically asks to draft or send an email. Never bundle email actions into other tasks.
 - WORKFLOW DECOMPOSITION & SUB-PROBLEM PROTOCOL:
   When Krish asks you to do ANY multi-step task, cross-application workflow, or chained automation (e.g. copying text from ChatGPT/WhatsApp/browser and pasting it to Yash on WhatsApp, or scraping news and drafting an email, or performing sequential browser actions like messaging someone on Instagram):
   1. MANDATORY FIRST ACTION: You MUST call 'plan_workflow_task' IMMEDIATELY. Decompose the request into clean, numbered atomic sub-problems with clear verification criteria. This registers the task and displays the live stepper on Krish's Tasks tab!
@@ -111,7 +117,7 @@ export function useLiveSession() {
     {
       id: 'welcome',
       role: 'assistant',
-      text: "Hi, I'm Elyra. Your AI assistant. I can help you with emails, web research, desktop actions, and more. How can I help you today?",
+      text: "Jai Shree Krishna Krish! Main hoon Elyra, aapki AI assistant. Aaj kya karne ka plan hai?",
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     }
   ]);
@@ -782,7 +788,7 @@ export function useLiveSession() {
                   clientContent: {
                     turns: [{
                       role: "user",
-                      parts: [{ text: "Hey ELYRA! I'm here. Give me a quick greeting! Do not call any tools." }]
+                      parts: [{ text: "Hey ELYRA! I'm here. Give me a warm, natural greeting in HINDI! Say 'Jai Shree Krishna Krish!' and ask what we're working on today. Remember your default language is Hindi. Do not call any tools." }]
                     }],
                     turnComplete: true
                   }
@@ -1084,6 +1090,56 @@ export function useLiveSession() {
                 recentToolCallsRef.current.push({ name: call.name, args: argsStr, time: now });
                 // Keep history clean (only last 15 seconds)
                 recentToolCallsRef.current = recentToolCallsRef.current.filter(t => (now - t.time) < 15000);
+
+                // ANTI-HALLUCINATION GATE: Prevent spontaneous tool execution on incomplete input, compliment, or unrequested sites
+                const lastUserSpeech = (pendingUserDraftRef.current || '').trim().toLowerCase();
+                const isIncompleteCommand = /\b(your\s+second|second|next|and\s+then|also|to|so)\s*$/i.test(lastUserSpeech);
+                const isPureCompliment = /^(okay|ok|well\s+done|good\s+job|great|nice|shabash|shukriya|thanks|thank\s+you|awesome|mast|badhiya)\s*[.,!]*$/i.test(lastUserSpeech);
+
+                if (!hasActiveTask && (isIncompleteCommand || isPureCompliment)) {
+                  if (call.name === 'browser_navigate' || call.name === 'browser_new_tab' || call.name === 'send_email' || (call.name === 'desktopAction' && (call.args as any)?.actionName === 'open_app')) {
+                    console.warn(`[AntiHallucinationGate] Blocked action (${call.name}) because user input was incomplete or just appreciation: "${pendingUserDraftRef.current}"`);
+                    responses.push({
+                      id: call.id || "1",
+                      name: call.name,
+                      response: {
+                        error: `Action blocked: Krish said "${pendingUserDraftRef.current}" which is incomplete or just appreciation. Krish did NOT ask to open any website, app, or email. Do NOT execute any tool! Simply respond verbally in Hindi asking Krish to state the full command.`
+                      }
+                    });
+                    continue;
+                  }
+                }
+
+                // Strictly block unrequested Pinterest or social media navigations:
+                if (!hasActiveTask && (call.name === 'browser_navigate' || call.name === 'browser_new_tab')) {
+                  const targetUrl = ((call.args as any)?.url || '').toLowerCase();
+                  if (targetUrl.includes('pinterest') && !lastUserSpeech.includes('pinterest')) {
+                    console.warn(`[AntiHallucinationGate] Blocked hallucinated navigation to Pinterest.`);
+                    responses.push({
+                      id: call.id || "1",
+                      name: call.name,
+                      response: {
+                        error: `Action blocked: Krish did not ask to open Pinterest. Do not open unrequested websites!`
+                      }
+                    });
+                    continue;
+                  }
+                }
+
+                // Strictly block unrequested email dispatch:
+                if (!hasActiveTask && (call.name === 'send_email' || call.name === 'confirm_and_send_email')) {
+                  if (!lastUserSpeech.includes('email') && !lastUserSpeech.includes('mail') && !lastUserSpeech.includes('draft') && !lastUserSpeech.includes('send')) {
+                    console.warn(`[AntiHallucinationGate] Blocked hallucinated email dispatch.`);
+                    responses.push({
+                      id: call.id || "1",
+                      name: call.name,
+                      response: {
+                        error: `Action blocked: Krish did not ask to send or draft an email. Do not call email tools spontaneously!`
+                      }
+                    });
+                    continue;
+                  }
+                }
 
                 const executed = await executeFunctionCall(call);
                 if (executed.response && typeof executed.response === 'object' && !(executed.response as any).error) {

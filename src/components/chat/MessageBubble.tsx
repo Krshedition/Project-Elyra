@@ -55,8 +55,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onOpenEma
           />
         )}
 
-        {/* Success Alert Card (e.g. Email Sent) */}
-        {message.isSuccess && (
+        {/* Success Alert Card (ONLY for Email Sent) */}
+        {message.isSuccess && message.emailDraft && message.emailDraft.status === 'sent' && (
           <div className="rounded-2xl bg-emerald-950/30 border border-emerald-500/30 p-3.5 flex items-center justify-between gap-4 max-w-md shadow-[0_0_15px_rgba(16,185,129,0.1)]">
             <div className="flex items-center gap-3">
               <div className="w-7 h-7 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
@@ -65,7 +65,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onOpenEma
               <div className="flex flex-col">
                 <span className="text-xs font-semibold text-emerald-300">Email sent successfully!</span>
                 <span className="text-[11px] text-slate-300">
-                  {message.emailDraft ? `Sent to ${message.emailDraft.to}` : 'Delivered to recipient'}
+                  Sent to {message.emailDraft.to}
                 </span>
               </div>
             </div>

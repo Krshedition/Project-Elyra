@@ -34,9 +34,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const isInitialState = messages.length <= 1;
 
   const samplePrompts = [
-    'Send an email to Rahul telling him that the project presentation is ready.',
-    'What is on my schedule today?',
-    'What is the weather in Bhopal right now?',
+    'Rahul ko email draft karo ki project presentation ready hai.',
+    'Mera aaj ka schedule kya hai?',
+    'Bhopal me abhi weather kaisa hai?',
   ];
 
   return (
@@ -53,11 +53,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
               </div>
 
               <h1 className="text-2xl font-bold text-white mb-2 tracking-tight">
-                Hi, I'm Elyra.
+                Jai Shree Krishna Krish! Main hoon Elyra.
               </h1>
               <p className="text-sm text-slate-400 mb-8 leading-relaxed">
-                Your AI assistant. I can help you with emails, web research, and desktop actions.
-                How can I help you today?
+                Aapki personal AI assistant. Main browser automation, emails, web research aur PC controls me help kar sakti hoon. Aaj kya karna hai?
               </p>
 
               {/* Quick Prompt Chips */}
