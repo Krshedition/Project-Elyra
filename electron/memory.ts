@@ -40,6 +40,26 @@ export function initMemory() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  try {
+    const seedFacts = [
+      { category: 'demo_workflows', key: 'demo_practice_form_url', value: 'https://demoqa.com/automation-practice-form' },
+      { category: 'personal', key: 'user_primary_email', value: 'krshedition@gmail.com' },
+      { category: 'tech_stack', key: 'email_dispatch_architecture', value: 'Node.js nodemailer headless SMTP over secure TLS (port 465) with Google App Password authentication and human-in-the-loop security verification before dispatch' },
+      { category: 'tech_stack', key: 'elyra_system_architecture', value: 'Google Gemini Multimodal Live API (WebSocket 16kHz audio & screen context) + Electron/React GUI + C++ Native Addon (node-addon-api) for Windows OS control + Playwright & CDP (Port 9222) for resilient DOM element tagging and browser automation' }
+    ];
+
+    const seedStmt = db.prepare(`
+      INSERT INTO user_facts (category, key, value, confidence, updated_at)
+      VALUES (@category, @key, @value, 1, CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+    `);
+    for (const f of seedFacts) {
+      seedStmt.run(f);
+    }
+  } catch (e) {
+    console.warn('[Memory] Could not seed presentation facts:', e);
+  }
 }
 
 export function getMemoryDb(): Database.Database {
