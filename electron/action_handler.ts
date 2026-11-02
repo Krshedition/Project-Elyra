@@ -2,10 +2,38 @@ import { validateAction } from './validator';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
+import fs from 'node:fs';
 
 import { dialog, BrowserWindow } from 'electron';
 
 const execAsync = promisify(exec);
+
+// Native require with fallback paths for production packaging (loaded early for clean SendInput)
+let automation: any;
+const possibleAddonPaths = [
+  path.join(__dirname, '..', 'build', 'Release', 'elyra_automation.node'),
+  path.join((process as any).resourcesPath || '', 'build', 'Release', 'elyra_automation.node'),
+  path.join((process as any).resourcesPath || '', 'app.asar.unpacked', 'build', 'Release', 'elyra_automation.node'),
+  path.join(process.cwd(), 'build', 'Release', 'elyra_automation.node')
+];
+
+for (const p of possibleAddonPaths) {
+  try {
+    if (fs.existsSync(p)) {
+      automation = require(p);
+      console.log(`[ActionHandler] Successfully loaded native addon from: ${p}`);
+      break;
+    }
+  } catch (err) { }
+}
+
+if (!automation) {
+  try {
+    automation = require('../build/Release/elyra_automation.node');
+  } catch (e) {
+    console.error("[ActionHandler] Failed to load native addon from all paths", e);
+  }
+}
 
 function expandEnvVars(filepath: string | undefined): string | undefined {
   if (!filepath) return filepath;
@@ -13,6 +41,14 @@ function expandEnvVars(filepath: string | undefined): string | undefined {
 }
 
 async function sendNativeKey(appName: string | undefined, rawKey: string): Promise<boolean> {
+  // 1. Prioritize C++ SendInput directly: ZERO NumLock flickering, 0ms latency, native Win32 driver level
+  if (automation && typeof automation.pressKey === 'function') {
+    try {
+      const ok = await automation.pressKey(appName || '', rawKey);
+      if (ok) return true;
+    } catch (e: any) { }
+  }
+
   const normKey = (rawKey || '').toLowerCase().trim();
 
   // Map hotkeys to WScript.Shell SendKeys format
@@ -76,36 +112,7 @@ async function sendNativeKey(appName: string | undefined, rawKey: string): Promi
 }
 
 
-import fs from 'node:fs';
 
-// Native require with fallback paths for production packaging
-let automation: any;
-const possibleAddonPaths = [
-  path.join(__dirname, '..', 'build', 'Release', 'elyra_automation.node'),
-  path.join((process as any).resourcesPath || '', 'build', 'Release', 'elyra_automation.node'),
-  path.join((process as any).resourcesPath || '', 'app.asar.unpacked', 'build', 'Release', 'elyra_automation.node'),
-  path.join(process.cwd(), 'build', 'Release', 'elyra_automation.node')
-];
-
-for (const p of possibleAddonPaths) {
-  try {
-    if (fs.existsSync(p)) {
-      automation = require(p);
-      console.log(`[ActionHandler] Successfully loaded native addon from: ${p}`);
-      break;
-    }
-  } catch (err) {
-    // Continue searching
-  }
-}
-
-if (!automation) {
-  try {
-    automation = require('../build/Release/elyra_automation.node');
-  } catch (e) {
-    console.error("[ActionHandler] Failed to load native addon from all paths", e);
-  }
-}
 
 // Global queue to prevent overlapping keystroke injection
 let typeQueue = Promise.resolve<any>(true);

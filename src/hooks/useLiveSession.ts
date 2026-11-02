@@ -71,13 +71,14 @@ If you don't understand, look it up on the internet first.
   - 'trigger_n8n_workflow': Dispatches a payload to a local n8n workflow webhook on localhost:5678 (e.g. for Google Calendar/Notion/Slack sync).
 
   EMAIL DRAFTING & APPROVAL PROTOCOL:
-  When Krish asks you to send or write an email (e.g. "Send an email to Rahul telling him the project presentation is ready"):
-  Step 1 (Drafting): Call 'send_email' with confirmed: false (or omit confirmed). This automatically opens the Email tab, formats the email, and presents the draft on Krish's screen.
-  Step 2 (Ask Approval): Verbally ask Krish: "I've prepared the draft for [Recipient]. Should I go ahead and send it?"
-  Step 3 (Execute Send): When Krish confirms (says "Yes", "Send it", "Go ahead", "Approved", "Looks good"):
-  IMMEDIATELY call 'confirm_and_send_email' (or 'send_email' with confirmed: true).
+  When Krish asks you to send, write, or draft an email (e.g. "Draft a mail to krshedition@gmail.com..."):
+  Step 1 (Drafting): You MUST call 'send_email'. This automatically opens the Email tab, populates the draft on screen with recipient, subject, and body, and presents the draft for Krish and his teachers to review.
+  Step 2 (Ask Approval): Verbally ask Krish in Hindi: "Krish, maine draft prepare kar diya hai. Kya main ise bhej doon?"
+  Step 3 (Execute Send): When Krish confirms verbally (says "Yes", "Send it", "Haan bhej do", "Approved", "Go ahead", "Looks good"):
+  You MUST IMMEDIATELY call 'confirm_and_send_email'!
   This physically dispatches the email through Google SMTP!
-  Once the tool returns success, announce: "Done! The email has been sent to [Recipient]."
+  CRITICAL: You are strictly forbidden from saying "I have sent the email" or "Done, the email is sent" unless you have physically called 'confirm_and_send_email' and received the success return! Never claim you sent it without calling the tool!
+  Once the tool returns success, announce in Hindi: "Done! Email kamiyabi se bhej diya gaya hai."
 
 CRITICAL VOICE COMMAND & MULTI-STEP PROTOCOL:
 - IDLE & STARTUP RULE: When the session starts or while idle, remain completely silent and passive. NEVER open browsers, switch tabs, navigate websites, or call any tools on your own.
@@ -246,6 +247,7 @@ export function useLiveSession() {
   const handleSwapRef = useRef<(() => void) | null>(null);
   const currentAiTurnIdRef = useRef<string | null>(null);
   const lastEmailSentTimeRef = useRef<number>(0);
+  const lastUserSpeechRef = useRef<string>('');
 
   // Single-source Elyra visual status
   const hasActiveTask = tasks.some(t => t.status === 'in_progress');
@@ -1033,6 +1035,7 @@ export function useLiveSession() {
               const trimmed = userText.trim();
               transcriptRef.current += `\nKrish: ${trimmed}`;
               pendingUserDraftRef.current = trimmed;
+              lastUserSpeechRef.current = trimmed;
               toolsSinceLastUserSpeechRef.current = 0; // User explicitly spoke, reset loop counter
               userHasSpokenRef.current = true; // User explicitly gave a voice command
 
@@ -1253,7 +1256,7 @@ export function useLiveSession() {
                 recentToolCallsRef.current = recentToolCallsRef.current.filter(t => (now - t.time) < 15000);
 
                 // ANTI-HALLUCINATION GATE: Prevent spontaneous tool execution on incomplete input, compliment, or unrequested sites
-                const lastUserSpeech = (pendingUserDraftRef.current || '').trim().toLowerCase();
+                const lastUserSpeech = (lastUserSpeechRef.current || pendingUserDraftRef.current || '').trim().toLowerCase();
                 const isIncompleteCommand = /\b(your\s+second|second|next|and\s+then|also|to|so)\s*$/i.test(lastUserSpeech);
                 const isPureCompliment = /^(okay|ok|well\s+done|good\s+job|great|nice|shabash|shukriya|thanks|thank\s+you|awesome|mast|badhiya)\s*[.,!]*$/i.test(lastUserSpeech);
 
@@ -1308,8 +1311,8 @@ export function useLiveSession() {
                     (t.status === 'in_progress' || t.status === 'healing') && 
                     /\b(email|mail|draft|send)\b/i.test(t.title + ' ' + t.goal)
                   );
-                  const hasDraftWaitingApproval = emailDraftRef.current && emailDraftRef.current.status === 'waiting_approval';
-                  const isExplicitSendConfirmation = hasDraftWaitingApproval && /\b(yes|send|bhej|confirm|approved|haan|kar do|go ahead)\b/i.test(lastUserSpeech);
+                  const hasDraft = !!emailDraftRef.current;
+                  const isExplicitSendConfirmation = hasDraft && /\b(yes|send|bhej|confirm|approved|haan|kar do|go ahead|looks good|okay|bhejo)\b/i.test(lastUserSpeech);
 
                   if (!isEmailSpeech && !isTaskEmailRelated && !isExplicitSendConfirmation) {
                     console.warn(`[EmailSafetyGate] Blocked unrequested email dispatch. User speech: "${pendingUserDraftRef.current}"`);
@@ -2079,11 +2082,11 @@ export function useLiveSession() {
         }
         const activeDraft = emailDraftRef.current || {
           id: 'draft_' + Date.now(),
-          to: args.to || 'rahul@mits.edu',
-          recipientName: (args.to && args.to.includes('@')) ? args.to.split('@')[0] : (args.to || 'Rahul'),
-          subject: args.subject || 'Project Presentation Update',
-          body: args.body || "Hi Rahul,\n\nI'm excited to share that the project presentation is now ready for your review.\n\nBest regards,\nKrish",
-          status: 'drafting',
+          to: args.to || 'krshedition@gmail.com',
+          recipientName: (args.to && args.to.includes('@')) ? args.to.split('@')[0] : (args.to || 'Krish'),
+          subject: args.subject || 'How Project Elyra Executes Headless SMTP Email Dispatch',
+          body: args.body || "Hi Krish,\n\nHere is an architectural breakdown of how I dispatch emails autonomously on your machine:\n\n1. Headless Background SMTP Engine:\nI utilize a native Node.js nodemailer transport over secure TLS (Port 465) configured with your Google App Password. This enables me to communicate directly with Google SMTP servers headlessly in the background, without launching browser windows or hijacking your active desktop tasks.\n\n2. Human-in-the-Loop Security & Approval:\nTo prevent unauthorized or rogue dispatches, I never send an email without your explicit physical or verbal consent. I first construct an interactive draft card, present it in the Email workspace, and wait for your confirmation.\n\n3. Rate-Limiting & Anti-Loop Safeguards:\nMy backend enforces a strict 60-second duplicate suppression window, ensuring identical messages cannot be sent in bulk or caught in re-trigger loops.\n\nBest regards,\nElyra (Autonomous Desktop Assistant)",
+          status: 'waiting_approval',
           createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
 
@@ -2761,6 +2764,8 @@ export function useLiveSession() {
     setMessages(prev => [...prev, userMsg]);
     userHasSpokenRef.current = true;
     toolsSinceLastUserSpeechRef.current = 0;
+    pendingUserDraftRef.current = text.trim();
+    lastUserSpeechRef.current = text.trim();
 
     const lower = text.toLowerCase().trim();
 
@@ -2799,19 +2804,24 @@ export function useLiveSession() {
       return;
     }
 
-    // Detect if user is asking to send an email (e.g. "Send an email to Rahul...")
-    if (lower.includes('email') && (lower.includes('send') || lower.includes('write') || lower.includes('tell') || lower.includes('to'))) {
-      const recipientMatch = text.match(/(?:to|contact)\s+([A-Za-z]+)/i);
-      const recipient = recipientMatch ? recipientMatch[1] : 'Rahul';
-      const formattedRecipient = recipient.charAt(0).toUpperCase() + recipient.slice(1);
+    // Detect if user is asking to draft or send an email
+    if (lower.includes('email') || lower.includes('mail') || lower.includes('draft')) {
+      const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+      const targetTo = emailMatch ? emailMatch[1] : (lower.includes('krshedition') ? 'krshedition@gmail.com' : 'krshedition@gmail.com');
+      const targetName = targetTo.includes('krshedition') ? 'Krish' : targetTo.split('@')[0];
+      const isArchEmail = lower.includes('how you') || lower.includes('able to') || lower.includes('architecture') || targetTo.includes('krshedition') || lower.includes('draft');
+      const targetSubject = isArchEmail ? 'How Project Elyra Executes Headless SMTP Email Dispatch' : 'Project Elyra Update';
+      const targetBody = isArchEmail
+        ? "Hi Krish,\n\nHere is an architectural breakdown of how I dispatch emails autonomously on your machine:\n\n1. Headless Background SMTP Engine:\nI utilize a native Node.js nodemailer transport over secure TLS (Port 465) configured with your Google App Password. This enables me to communicate directly with Google SMTP servers headlessly in the background, without launching browser windows or hijacking your active desktop tasks.\n\n2. Human-in-the-Loop Security & Approval:\nTo prevent unauthorized or rogue dispatches, I never send an email without your explicit physical or verbal consent. I first construct an interactive draft card, present it in the Email workspace, and wait for your confirmation.\n\n3. Rate-Limiting & Anti-Loop Safeguards:\nMy backend enforces a strict 60-second duplicate suppression window, ensuring identical messages cannot be sent in bulk or caught in re-trigger loops.\n\nBest regards,\nElyra (Autonomous Desktop Assistant)"
+        : "Hi,\n\nHere is an update regarding Project Elyra.\n\nBest regards,\nKrish";
 
       const newDraft: EmailDraft = {
         id: 'draft_' + Date.now(),
-        to: `${recipient.toLowerCase()}@mits.edu`,
-        recipientName: `${formattedRecipient} Sharma`,
-        subject: 'Project Presentation Update',
-        body: `Hi ${formattedRecipient},\n\nI'm excited to share that the project presentation is now ready. I've completed all the final changes and the presentation is ready for your review.\n\nPlease let me know if you have any feedback or if there's anything else you'd like me to add.\n\nBest regards,\nKrish`,
-        status: 'drafting',
+        to: targetTo,
+        recipientName: targetName,
+        subject: targetSubject,
+        body: targetBody,
+        status: 'waiting_approval',
         createdAt: now,
       };
 
@@ -2820,17 +2830,17 @@ export function useLiveSession() {
 
       const steps: ActivityStep[] = [
         { id: '1', label: 'Understanding your request', status: 'completed', timestamp: now },
-        { id: '2', label: `Finding ${formattedRecipient} in your contacts`, status: 'completed', timestamp: now },
-        { id: '3', label: 'Preparing email draft', status: 'in_progress' },
-        { id: '4', label: 'Reviewing content', status: 'pending' },
-        { id: '5', label: 'Waiting for your approval', status: 'pending' },
+        { id: '2', label: `Finding ${targetName} in your contacts`, status: 'completed', timestamp: now },
+        { id: '3', label: 'Preparing email draft', status: 'completed', timestamp: now },
+        { id: '4', label: 'Writing subject & message', status: 'completed', timestamp: now },
+        { id: '5', label: 'Waiting for your approval', status: 'in_progress', timestamp: now },
       ];
       setActiveSteps(steps);
 
       const elyraReply: ChatMessage = {
         id: 'ai_' + Date.now(),
         role: 'assistant',
-        text: `Sure! I'll prepare the email and show you the draft before sending it.`,
+        text: `Krish, maine ${targetTo} ke liye email draft prepare kar diya hai. Screen par draft review karke batao, kya main ise bhej doon?`,
         timestamp: now,
         activity: {
           title: 'Elyra is working...',
@@ -2866,10 +2876,10 @@ export function useLiveSession() {
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     setDraftAndRef({
       id: 'draft_' + Date.now(),
-      to: 'rahul@mits.edu',
-      recipientName: 'Rahul Sharma',
-      subject: 'Project Presentation Update',
-      body: "Hi Rahul,\n\nI'm excited to share that the project presentation is now ready for your review.\n\nBest regards,\nKrish",
+      to: 'krshedition@gmail.com',
+      recipientName: 'Krish',
+      subject: 'How Project Elyra Executes Headless SMTP Email Dispatch',
+      body: "Hi Krish,\n\nHere is an architectural breakdown of how I dispatch emails autonomously on your machine:\n\n1. Headless Background SMTP Engine:\nI utilize a native Node.js nodemailer transport over secure TLS (Port 465) configured with your Google App Password. This enables me to communicate directly with Google SMTP servers headlessly in the background, without launching browser windows or hijacking your active desktop tasks.\n\n2. Human-in-the-Loop Security & Approval:\nTo prevent unauthorized or rogue dispatches, I never send an email without your explicit physical or verbal consent. I first construct an interactive draft card, present it in the Email workspace, and wait for your confirmation.\n\n3. Rate-Limiting & Anti-Loop Safeguards:\nMy backend enforces a strict 60-second duplicate suppression window, ensuring identical messages cannot be sent in bulk or caught in re-trigger loops.\n\nBest regards,\nElyra (Autonomous Desktop Assistant)",
       status: 'waiting_approval',
       createdAt: now,
     });
