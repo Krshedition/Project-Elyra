@@ -75,6 +75,7 @@ export interface AutomatedTask {
   currentStepIndex: number;
   steps: WorkflowSubStep[];
   startedAt: string;
+  startedAtMs?: number;
   completedAt?: string;
   logs: string[];
 }

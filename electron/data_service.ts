@@ -200,6 +200,7 @@ export class DataService {
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/\s+/g, ' ')
+        .replace(/(?:javascript is disabled|verify that you're not a robot|enable javascript and then reload the page|attention required! \| cloudflare)[^.]*\.?/gi, '')
         .trim();
 
       if (clean.length > 2500) {

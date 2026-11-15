@@ -109,7 +109,8 @@ CRITICAL VOICE COMMAND & MULTI-STEP PROTOCOL:
   8. EMAIL INTEGRITY: NEVER call 'send_email' or 'confirm_and_send_email' unless Krish explicitly and specifically asks to draft or send an email. Never bundle email actions into other tasks.
 - WORKFLOW DECOMPOSITION & SUB-PROBLEM PROTOCOL:
   When Krish asks you to do ANY multi-step task, cross-application workflow, or chained automation (e.g. copying text from ChatGPT/WhatsApp/browser and pasting it to Yash on WhatsApp, or scraping news and drafting an email, or performing sequential browser actions like messaging someone on Instagram):
-  1. MANDATORY FIRST ACTION: You MUST call 'plan_workflow_task' IMMEDIATELY. Decompose the request into clean, numbered atomic sub-problems with clear verification criteria. This registers the task and displays the live stepper on Krish's Tasks tab!
+  1. MANDATORY SINGLE PLANNING ACTION: You MUST call 'plan_workflow_task' EXACTLY ONCE at the start of the workflow. Decompose the request into clean, numbered atomic sub-problems with clear verification criteria. This registers the task and displays the live stepper on Krish's Tasks tab!
+     CRITICAL TASK DEDUPLICATION RULE: DO NOT call 'plan_workflow_task' again for subsequent steps or re-planning during execution. Decompose all sub-problems (e.g. 1. Complete Research, 2. Open Notepad, 3. Paste to Notepad) in that SINGLE initial call. Repeated calls to 'plan_workflow_task' clutter Krish's Tasks dashboard with duplicate schedules.
   2. CONTINUOUS AUTONOMOUS EXECUTION: Execute the tools required for all sub-problems sequentially until the goal is fully achieved. DO NOT pause between sub-problems to ask Krish "Should I continue?" or wait for voice input. Krish's initial voice command authorizes the entire workflow. Keep calling tools until all sub-problems are verified.
   3. RIGOROUS OUTCOME VERIFICATION & ROLLBACK: Never mark a sub-problem 'completed' just because an action was clicked. Verify the actual page state (URL changed or target panel opened). If you click the wrong button (such as opening 'Notifications' instead of 'Messages'), immediately dismiss the wrong drawer via 'browser_dismiss_overlays' or press Escape, re-analyze the page, find the correct element ID (e.g. element [137] for Messages), and click the right element.
   4. Once all sub-problems are verified, speak a single concise verbal confirmation to Krish.
@@ -260,6 +261,10 @@ export function useLiveSession() {
   const currentAiTurnIdRef = useRef<string | null>(null);
   const lastEmailSentTimeRef = useRef<number>(0);
   const lastUserSpeechRef = useRef<string>('');
+  const currentCommandTaskIdRef = useRef<string | null>(null);
+  const hasCreatedTaskForCurrentTurnRef = useRef<boolean>(false);
+  const lastUserCommandTimeRef = useRef<number>(0);
+  const lastDeepResearchTimeRef = useRef<{ topic: string; time: number } | null>(null);
 
   // Single-source Elyra visual status
   const hasActiveTask = tasks.some(t => t.status === 'in_progress');
@@ -1050,6 +1055,9 @@ export function useLiveSession() {
               lastUserSpeechRef.current = trimmed;
               toolsSinceLastUserSpeechRef.current = 0; // User explicitly spoke, reset loop counter
               userHasSpokenRef.current = true; // User explicitly gave a voice command
+              currentCommandTaskIdRef.current = null; // New command turn starts: clear active task anchor
+              hasCreatedTaskForCurrentTurnRef.current = false;
+              lastUserCommandTimeRef.current = Date.now();
 
               const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
               setMessages(prev => {
@@ -1130,7 +1138,14 @@ export function useLiveSession() {
               const hasActiveTask = tasksRef.current.some(t => t.status === 'in_progress' || t.status === 'healing');
 
               // AUTO-TASK ENGINE: Automatically create and track structured tasks for user commands
-              if (!hasActiveTask && data.toolCall.functionCalls.length > 0 && !data.toolCall.functionCalls.some((c: any) => c.name === 'plan_workflow_task')) {
+              // CRITICAL GUARD: Runs AT MOST ONCE per user command turn, and only if NO task is already active or recently scheduled!
+              const alreadyHandledThisTurn = hasCreatedTaskForCurrentTurnRef.current || !!currentCommandTaskIdRef.current;
+              const hasRecentTask = tasksRef.current.some(t => {
+                const age = now - (t.startedAtMs || 0);
+                return age < 45000 || t.status === 'in_progress' || t.status === 'healing';
+              });
+
+              if (!alreadyHandledThisTurn && !hasRecentTask && !hasActiveTask && data.toolCall.functionCalls.length > 0 && !data.toolCall.functionCalls.some((c: any) => c.name === 'plan_workflow_task')) {
                 const speech = (pendingUserDraftRef.current || lastUserSpeechRef.current || '').trim();
                 const firstCall = data.toolCall.functionCalls[0];
                 let taskTitle = 'Desktop & Web Automation';
@@ -1202,12 +1217,15 @@ export function useLiveSession() {
                       currentStepIndex: 0,
                       steps: autoSteps,
                       startedAt: nowClock,
+                      startedAtMs: now,
                       logs: [
                         `[${nowClock}] [TaskEngine] Auto-detected task: "${taskTitle}"`,
                         `[${nowClock}] [TaskEngine] Decomposed into ${autoSteps.length} atomic sub-problems.`,
                         `[${nowClock}] [TaskEngine] Starting Sub-problem 1: ${autoSteps[0].title}`
                       ]
                     };
+                    currentCommandTaskIdRef.current = autoTask.id;
+                    hasCreatedTaskForCurrentTurnRef.current = true;
                     tasksRef.current = [autoTask, ...tasksRef.current];
                     setTasks(tasksRef.current);
                   }
@@ -1544,27 +1562,60 @@ export function useLiveSession() {
           }
         }
 
-        // 2. Task Deduplication: Prevent duplicate tasks if an identical or similar task was registered recently
+        const nowMs = Date.now();
+        const nowClock = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        // 2. Command Anchor Check: If a task was ALREADY created for this voice command turn, NEVER schedule another task!
+        if (currentCommandTaskIdRef.current) {
+          const existingIdx = tasksRef.current.findIndex(t => t.id === currentCommandTaskIdRef.current);
+          if (existingIdx !== -1) {
+            console.log(`[PlanTaskGate] Task already anchored for current command turn (${currentCommandTaskIdRef.current}). Reusing task.`);
+            return {
+              id: callId,
+              name,
+              response: {
+                result: `Task plan synchronized with current active workflow "${tasksRef.current[existingIdx].title}". Continue executing sub-problems.`
+              }
+            };
+          }
+        }
+
+        // 3. Semantic & Keyword Deduplication: Check if any recent task (created < 60s ago or currently active) covers the same workflow
         const existingSimilar = tasksRef.current.find(t => {
+          const age = nowMs - (t.startedAtMs || 0);
+          const isRecent = age < 60000 || t.status === 'in_progress' || t.status === 'healing';
+          if (!isRecent) return false;
+
           const titleMatch = t.title.toLowerCase().trim() === title.toLowerCase().trim();
           const goalMatch = t.goal.toLowerCase().trim() === goal.toLowerCase().trim();
-          const isRecent = t.status === 'in_progress' || t.status === 'healing' || t.status === 'completed';
-          return (titleMatch || goalMatch) && isRecent;
+          if (titleMatch || goalMatch) return true;
+
+          // Semantic keyword overlap check
+          const tLower = (t.title + ' ' + t.goal).toLowerCase();
+          const newLower = (title + ' ' + goal).toLowerCase();
+          if (tLower.includes(title.toLowerCase()) || newLower.includes(t.title.toLowerCase())) return true;
+
+          const extractKeywords = (str: string) => str.split(/\W+/).filter(w => w.length > 3 && !['task', 'workflow', 'multi', 'step', 'with', 'from', 'into', 'this', 'that', 'then', 'will', 'have', 'been', 'about'].includes(w));
+          const wordsA = new Set(extractKeywords(tLower));
+          const wordsB = extractKeywords(newLower);
+          const overlap = wordsB.filter(w => wordsA.has(w));
+          return overlap.length >= 1; // Overlaps in meaningful keywords (e.g. "mits", "research", "notepad", "youtube", "demoqa")
         });
 
         if (existingSimilar) {
-          console.log(`[PlanTaskGate] Deduplicated plan_workflow_task: matching task already exists (${existingSimilar.id}).`);
+          currentCommandTaskIdRef.current = existingSimilar.id;
+          hasCreatedTaskForCurrentTurnRef.current = true;
+          console.log(`[PlanTaskGate] Deduplicated plan_workflow_task: matching recent task already exists ("${existingSimilar.title}").`);
           return {
             id: callId,
             name,
             response: {
-              result: `Task already registered as "${existingSimilar.title}". Continuing execution with existing task plan.`
+              result: `Workflow "${existingSimilar.title}" is already scheduled and active. Proceed with Sub-problem execution.`
             }
           };
         }
 
         const newTaskId = 'task_' + Date.now();
-        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const rawSteps = Array.isArray(args.steps) ? args.steps : [];
 
         const parsedSteps: WorkflowSubStep[] = rawSteps.map((s: any, idx: number) => ({
@@ -1576,7 +1627,7 @@ export function useLiveSession() {
           actionName: s.actionName || 'tool_call',
           actionDetails: typeof s.actionDetails === 'string' ? s.actionDetails : JSON.stringify(s.actionDetails || {}),
           verificationMethod: s.verificationMethod || 'DirectBrowserEngine CDP Evaluation',
-          timestamp: idx === 0 ? now : undefined,
+          timestamp: idx === 0 ? nowClock : undefined,
         }));
 
         const newTask: AutomatedTask = {
@@ -1589,14 +1640,17 @@ export function useLiveSession() {
           status: 'in_progress',
           currentStepIndex: 0,
           steps: parsedSteps,
-          startedAt: now,
+          startedAt: nowClock,
+          startedAtMs: nowMs,
           logs: [
-            `[${now}] [WorkflowEngine] Task registered: "${title}"`,
-            `[${now}] [WorkflowEngine] Decomposed into ${parsedSteps.length} discrete atomic sub-problems with verification criteria.`,
-            `[${now}] [WorkflowEngine] Starting Sub-problem 1: ${parsedSteps[0]?.title || 'Step 1'}`
+            `[${nowClock}] [WorkflowEngine] Task registered: "${title}"`,
+            `[${nowClock}] [WorkflowEngine] Decomposed into ${parsedSteps.length} discrete atomic sub-problems with verification criteria.`,
+            `[${nowClock}] [WorkflowEngine] Starting Sub-problem 1: ${parsedSteps[0]?.title || 'Step 1'}`
           ]
         };
 
+        currentCommandTaskIdRef.current = newTaskId;
+        hasCreatedTaskForCurrentTurnRef.current = true;
         tasksRef.current = [newTask, ...tasksRef.current];
         setTasks(tasksRef.current);
         setCurrentTab('tasks');
@@ -2378,8 +2432,27 @@ export function useLiveSession() {
 
       // Milestone 4: Autonomous Multi-Source Deep Research Engine
       if (name === 'conduct_deep_research') {
-        console.log('[ResearchEngine] Starting autonomous deep research on:', args.topic);
+        const topic = String(args.topic || '').trim();
+        const nowMs = Date.now();
         const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+        if (lastDeepResearchTimeRef.current && (nowMs - lastDeepResearchTimeRef.current.time) < 45000 && lastDeepResearchTimeRef.current.topic.toLowerCase().slice(0, 15) === topic.toLowerCase().slice(0, 15)) {
+          console.log('[ResearchEngine] Skipping duplicate deep research call within 45s cooldown.');
+          return {
+            id: callId,
+            name,
+            response: {
+              result: {
+                topic,
+                status: 'Already completed',
+                note: 'Deep research on this topic was already conducted and synthesized in the active session.'
+              }
+            }
+          };
+        }
+        lastDeepResearchTimeRef.current = { topic, time: nowMs };
+
+        console.log('[ResearchEngine] Starting autonomous deep research on:', topic);
 
         setTasks(prev => prev.map(t => {
           if (t.status !== 'in_progress') return t;
@@ -2469,6 +2542,9 @@ export function useLiveSession() {
   const cleanup = () => {
     userHasSpokenRef.current = false;
     toolsSinceLastUserSpeechRef.current = 0;
+    currentCommandTaskIdRef.current = null;
+    hasCreatedTaskForCurrentTurnRef.current = false;
+    lastDeepResearchTimeRef.current = null;
 
     const finalTranscript = transcriptRef.current;
     if (finalTranscript) {
@@ -2869,6 +2945,9 @@ export function useLiveSession() {
     toolsSinceLastUserSpeechRef.current = 0;
     pendingUserDraftRef.current = text.trim();
     lastUserSpeechRef.current = text.trim();
+    currentCommandTaskIdRef.current = null;
+    hasCreatedTaskForCurrentTurnRef.current = false;
+    lastUserCommandTimeRef.current = Date.now();
 
     const lower = text.toLowerCase().trim();
 

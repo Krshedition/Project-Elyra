@@ -1,4 +1,5 @@
 import { DataService } from './data_service';
+import { DirectBrowserEngine } from './browser_service';
 
 export interface ResearchSource {
   title: string;
@@ -90,6 +91,18 @@ export class ResearchService {
       // Deduplicate by domain to ensure diverse perspectives
       const uniqueSourceCandidates = this.filterDiverseDomains(candidateUrls, maxSources);
       stepsExecuted.push(`Identified ${uniqueSourceCandidates.length} high-authority candidate sources`);
+
+      // VISUAL BROWSER RESEARCH INTEGRATION:
+      // Navigate Brave browser to the top candidate URL so Krish visually sees Elyra browsing & researching the institution
+      try {
+        const browser = DirectBrowserEngine.getInstance();
+        if (uniqueSourceCandidates.length > 0 && uniqueSourceCandidates[0].url) {
+          console.log('[ResearchService] Visually navigating Brave browser to top source:', uniqueSourceCandidates[0].url);
+          browser.navigate(uniqueSourceCandidates[0].url).catch(e => console.log('[ResearchService] Browser nav background note:', e));
+        }
+      } catch (e) {
+        console.log('[ResearchService] Optional visual browser step skipped:', e);
+      }
 
       // Step 2: Concurrently scrape and extract text from selected sources
       const sources: ResearchSource[] = [];
@@ -243,7 +256,8 @@ export class ResearchService {
     const sentences = content
       .split(/(?<=[.?!])\s+/)
       .map(s => s.replace(/\s+/g, ' ').trim())
-      .filter(s => s.length > 40 && s.length < 280);
+      .filter(s => s.length > 40 && s.length < 280)
+      .filter(s => !/javascript is disabled|verify that you're not a robot|cloudflare|captcha|enable cookies|access denied/i.test(s));
 
     const ranked = sentences.map(sentence => {
       const lower = sentence.toLowerCase();
