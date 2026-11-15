@@ -93,8 +93,20 @@ CRITICAL VOICE COMMAND & MULTI-STEP PROTOCOL:
   1. DO NOT interrupt Krish while he is speaking or pausing between words. Wait until he has COMPLETELY finished expressing his thought or command before replying or acting.
   2. INCOMPLETE THOUGHTS: If Krish pauses or utters an incomplete phrase (such as "Okay, well done. Your second...", "So next...", "And then..."), DO NOT assume what he wants, DO NOT invent tasks, and DO NOT call any tool. Simply reply politely in Hindi: "Haan Krish, batao second task kya hai?" or wait for him to finish speaking.
   3. COMPLIMENTS & APPRECIATION: If Krish praises you ("Well done", "Good job", "Great", "Nice", "Shabash", "Thank you"), ONLY respond verbally in Hindi with natural wit and gratitude (e.g. "Shukriya Krish! Agla task batao."). NEVER open websites or execute tools on compliments!
-  4. STRICT TARGETING & ANTI-HALLUCINATION: You are strictly forbidden from opening Pinterest, social media, shopping sites, or any website unless Krish has explicitly and literally named the website in that command (e.g. "Open Pinterest"). Randomly opening unrequested websites like Pinterest is a critical failure.
-  5. EMAIL INTEGRITY: NEVER call 'send_email' or 'confirm_and_send_email' unless Krish explicitly and specifically asks to draft or send an email. Never bundle email actions into other tasks.
+  4. CASUAL TESTING BANTER & CHITCHAT: If Krish says casual introductory testing phrases like "aaj kuch naya sa karte hain", "tumhara test lete hain", "let's have a test", "pura test lete hain A to Z", or "testing karte hain":
+     - Treat this as CASUAL CONVERSATION ONLY.
+     - NEVER call any tools! NEVER query memory, NEVER call 'plan_workflow_task', and NEVER open any website or form!
+     - Simply reply verbally in Hindi with playful confidence: "Main bilkul tayar hoon Krish! A to Z jo test lena hai le lo, batao pehla task kya hai?" and wait for Krish's actual task command.
+  5. MEMORY FACTS ARE PASSIVE REFERENCE ONLY:
+     - Memory items (e.g. 'demo_practice_form_url', personal facts, architecture summaries) are strictly PASSIVE facts stored in memory for reference.
+     - NEVER autonomously trigger, plan, or execute any website navigation, form filling, or task planning based on memory facts unless Krish explicitly asks you in his current voice command!
+  6. SINGLE-ACTION OS COMMAND ISOLATION:
+     - When Krish asks for a single OS action (e.g. "turn the volume to 60%", "mute", "set brightness", "check battery"):
+     - Execute ONLY that specific OS action via 'desktopAction'.
+     - NEVER bundle or simultaneously trigger browser automation, form filling, or task planning!
+     - Confirm verbally in concise Hindi (e.g. "Volume 60% set kar diya hai.") and STOP.
+  7. STRICT TARGETING & ANTI-HALLUCINATION: You are strictly forbidden from opening Pinterest, social media, shopping sites, or DemoQA unless Krish has explicitly and literally named that website or task in that command.
+  8. EMAIL INTEGRITY: NEVER call 'send_email' or 'confirm_and_send_email' unless Krish explicitly and specifically asks to draft or send an email. Never bundle email actions into other tasks.
 - WORKFLOW DECOMPOSITION & SUB-PROBLEM PROTOCOL:
   When Krish asks you to do ANY multi-step task, cross-application workflow, or chained automation (e.g. copying text from ChatGPT/WhatsApp/browser and pasting it to Yash on WhatsApp, or scraping news and drafting an email, or performing sequential browser actions like messaging someone on Instagram):
   1. MANDATORY FIRST ACTION: You MUST call 'plan_workflow_task' IMMEDIATELY. Decompose the request into clean, numbered atomic sub-problems with clear verification criteria. This registers the task and displays the live stepper on Krish's Tasks tab!
@@ -318,7 +330,7 @@ export function useLiveSession() {
         console.error("Failed to load core memory facts for system instruction", e);
       }
 
-      systemInstruction += "\\n\\nYou also have a search_memory tool. Use it whenever you need to recall past conversation summaries.";
+      systemInstruction += "\\n\\nYou also have a search_memory tool. Use it whenever you need to recall past conversation summaries. CRITICAL RULE: Memory facts and search results are strictly PASSIVE reference knowledge. NEVER proactively execute, open websites, or start tasks based solely on memory facts unless Krish explicitly commands it in his current voice request!";
       // Check mic permission explicitly
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1119,7 +1131,7 @@ export function useLiveSession() {
 
               // AUTO-TASK ENGINE: Automatically create and track structured tasks for user commands
               if (!hasActiveTask && data.toolCall.functionCalls.length > 0 && !data.toolCall.functionCalls.some((c: any) => c.name === 'plan_workflow_task')) {
-                const speech = (pendingUserDraftRef.current || '').trim();
+                const speech = (pendingUserDraftRef.current || lastUserSpeechRef.current || '').trim();
                 const firstCall = data.toolCall.functionCalls[0];
                 let taskTitle = 'Desktop & Web Automation';
                 let sourceApp = 'Desktop';
@@ -1128,65 +1140,77 @@ export function useLiveSession() {
                 const nowClock = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const speechLower = speech.toLowerCase();
 
-                if (speechLower.includes('notepad') || (firstCall.name === 'desktopAction' && (firstCall.args as any)?.appName === 'notepad')) {
-                  taskTitle = 'Notepad: Launch & Inject Content';
-                  sourceApp = 'Desktop';
-                  targetApp = 'Notepad';
-                  autoSteps = [
-                    { id: 's1', stepNumber: 1, title: 'Launch Notepad application', subProblem: 'Open Notepad on Windows desktop', status: 'in_progress', actionName: 'open_app', timestamp: nowClock },
-                    { id: 's2', stepNumber: 2, title: 'Compose & inject requested text', subProblem: 'Write content into Notepad window', status: 'pending', actionName: 'type_text' },
-                    { id: 's3', stepNumber: 3, title: 'Verify document presentation', subProblem: 'Ensure text is displayed on screen', status: 'pending', actionName: 'verify_status' }
-                  ];
-                } else if (speechLower.includes('demoform') || speechLower.includes('demo form') || speechLower.includes('practice form') || (firstCall.name === 'browser_navigate' && String((firstCall.args as any)?.url || '').includes('demoqa'))) {
-                  taskTitle = 'DemoQA: Automated Form Completion';
-                  sourceApp = 'Brave Browser';
-                  targetApp = 'DemoQA Practice Form';
-                  autoSteps = [
-                    { id: 's1', stepNumber: 1, title: 'Navigate to Practice Form', subProblem: 'Open https://demoqa.com/automation-practice-form via CDP', status: 'in_progress', actionName: 'browser_navigate', timestamp: nowClock },
-                    { id: 's2', stepNumber: 2, title: 'Analyze & tag input elements', subProblem: 'Inspect DOM tree and overlay numeric tags on inputs', status: 'pending', actionName: 'browser_analyze_page' },
-                    { id: 's3', stepNumber: 3, title: 'Populate user credentials', subProblem: 'Fill First Name, Last Name, Email, and Mobile', status: 'pending', actionName: 'browser_type_input' },
-                    { id: 's4', stepNumber: 4, title: 'Select gender and address', subProblem: 'Select options and finalize form fields', status: 'pending', actionName: 'browser_click_element' },
-                    { id: 's5', stepNumber: 5, title: 'Verify form completion', subProblem: 'Confirm all required fields are filled successfully', status: 'pending', actionName: 'verify_status' }
-                  ];
-                } else if (speechLower.includes('youtube') || (firstCall.name === 'browser_navigate' && String((firstCall.args as any)?.url || '').includes('youtube'))) {
-                  taskTitle = 'YouTube: Search, Play & Mute Video';
-                  sourceApp = 'Brave Browser';
-                  targetApp = 'YouTube Web';
-                  autoSteps = [
-                    { id: 's1', stepNumber: 1, title: 'Navigate to YouTube', subProblem: 'Open YouTube in Brave browser via CDP', status: 'in_progress', actionName: 'browser_navigate', timestamp: nowClock },
-                    { id: 's2', stepNumber: 2, title: 'Search for requested song', subProblem: 'Type query into search input and submit', status: 'pending', actionName: 'browser_type_input' },
-                    { id: 's3', stepNumber: 3, title: 'Play matching video', subProblem: 'Click first video result to start playback', status: 'pending', actionName: 'browser_click_video' },
-                    { id: 's4', stepNumber: 4, title: 'Mute audio playback', subProblem: 'Mute playing video stream', status: 'pending', actionName: 'set_volume' }
-                  ];
-                } else if (speech) {
-                  taskTitle = speech.length > 50 ? speech.slice(0, 47) + '...' : speech;
-                  autoSteps = [
-                    { id: 's1', stepNumber: 1, title: 'Initialize requested task', subProblem: `Start execution: ${speech}`, status: 'in_progress', actionName: firstCall.name, timestamp: nowClock },
-                    { id: 's2', stepNumber: 2, title: 'Execute automated operations', subProblem: 'Perform sequential browser and OS actions', status: 'pending', actionName: 'action_step' },
-                    { id: 's3', stepNumber: 3, title: 'Verify outcome & confirm', subProblem: 'Verify completed state and confirm verbally', status: 'pending', actionName: 'verify_status' }
-                  ];
+                // Non-task tool filter: Read-only queries, chitchat, and single-action OS controls must NEVER trigger auto-tasks!
+                const nonTaskToolNames = [
+                  'search_memory', 'get_system_info', 'get_focused_window', 'get_running_processes',
+                  'fetch_weather', 'fetch_crypto', 'fetch_web_search', 'fetch_url_content',
+                  'browser_dismiss_overlays', 'browser_list_tabs', 'recover_workflow_step', 'verify_task_completion'
+                ];
+                const isSingleOsAction = firstCall.name === 'desktopAction' && [
+                  'set_volume', 'set_brightness', 'toggle_wifi', 'toggle_bluetooth',
+                  'get_audio_devices', 'set_default_audio_device', 'read_clipboard'
+                ].includes((firstCall.args as any)?.actionName);
+
+                if (!nonTaskToolNames.includes(firstCall.name) && !isSingleOsAction) {
+                  if (speechLower.includes('notepad') || (firstCall.name === 'desktopAction' && (firstCall.args as any)?.appName === 'notepad')) {
+                    taskTitle = 'Notepad: Launch & Inject Content';
+                    sourceApp = 'Desktop';
+                    targetApp = 'Notepad';
+                    autoSteps = [
+                      { id: 's1', stepNumber: 1, title: 'Launch Notepad application', subProblem: 'Open Notepad on Windows desktop', status: 'in_progress', actionName: 'open_app', timestamp: nowClock },
+                      { id: 's2', stepNumber: 2, title: 'Compose & inject requested text', subProblem: 'Write content into Notepad window', status: 'pending', actionName: 'type_text' },
+                      { id: 's3', stepNumber: 3, title: 'Verify document presentation', subProblem: 'Ensure text is displayed on screen', status: 'pending', actionName: 'verify_status' }
+                    ];
+                  } else if (speechLower.includes('demoform') || speechLower.includes('demo form') || speechLower.includes('practice form')) {
+                    taskTitle = 'DemoQA: Automated Form Completion';
+                    sourceApp = 'Brave Browser';
+                    targetApp = 'DemoQA Practice Form';
+                    autoSteps = [
+                      { id: 's1', stepNumber: 1, title: 'Navigate to Practice Form', subProblem: 'Open https://demoqa.com/automation-practice-form via CDP', status: 'in_progress', actionName: 'browser_navigate', timestamp: nowClock },
+                      { id: 's2', stepNumber: 2, title: 'Analyze & tag input elements', subProblem: 'Inspect DOM tree and overlay numeric tags on inputs', status: 'pending', actionName: 'browser_analyze_page' },
+                      { id: 's3', stepNumber: 3, title: 'Populate user credentials', subProblem: 'Fill First Name, Last Name, Email, and Mobile', status: 'pending', actionName: 'browser_type_input' },
+                      { id: 's4', stepNumber: 4, title: 'Select gender and address', subProblem: 'Select options and finalize form fields', status: 'pending', actionName: 'browser_click_element' },
+                      { id: 's5', stepNumber: 5, title: 'Verify form completion', subProblem: 'Confirm all required fields are filled successfully', status: 'pending', actionName: 'verify_status' }
+                    ];
+                  } else if (speechLower.includes('youtube') || (firstCall.name === 'browser_navigate' && String((firstCall.args as any)?.url || '').includes('youtube'))) {
+                    taskTitle = 'YouTube: Search, Play & Mute Video';
+                    sourceApp = 'Brave Browser';
+                    targetApp = 'YouTube Web';
+                    autoSteps = [
+                      { id: 's1', stepNumber: 1, title: 'Navigate to YouTube', subProblem: 'Open YouTube in Brave browser via CDP', status: 'in_progress', actionName: 'browser_navigate', timestamp: nowClock },
+                      { id: 's2', stepNumber: 2, title: 'Search for requested song', subProblem: 'Type query into search input and submit', status: 'pending', actionName: 'browser_type_input' },
+                      { id: 's3', stepNumber: 3, title: 'Play matching video', subProblem: 'Click first video result to start playback', status: 'pending', actionName: 'browser_click_video' },
+                      { id: 's4', stepNumber: 4, title: 'Mute audio playback', subProblem: 'Mute playing video stream', status: 'pending', actionName: 'set_volume' }
+                    ];
+                  }
+                  // Explicit design: No generic speech fallback! Casual conversation will never schedule a phantom task.
                 }
 
                 if (autoSteps.length > 0) {
-                  const autoTask: AutomatedTask = {
-                    id: 'task_' + Date.now(),
-                    title: taskTitle,
-                    goal: speech || taskTitle,
-                    category: 'cross_app',
-                    sourceApp,
-                    targetApp,
-                    status: 'in_progress',
-                    currentStepIndex: 0,
-                    steps: autoSteps,
-                    startedAt: nowClock,
-                    logs: [
-                      `[${nowClock}] [TaskEngine] Auto-detected task: "${taskTitle}"`,
-                      `[${nowClock}] [TaskEngine] Decomposed into ${autoSteps.length} atomic sub-problems.`,
-                      `[${nowClock}] [TaskEngine] Starting Sub-problem 1: ${autoSteps[0].title}`
-                    ]
-                  };
-                  tasksRef.current = [autoTask, ...tasksRef.current];
-                  setTasks(tasksRef.current);
+                  const isDuplicate = tasksRef.current.some(t => 
+                    t.title.toLowerCase().trim() === taskTitle.toLowerCase().trim() && (t.status === 'in_progress' || t.status === 'healing')
+                  );
+                  if (!isDuplicate) {
+                    const autoTask: AutomatedTask = {
+                      id: 'task_' + Date.now(),
+                      title: taskTitle,
+                      goal: speech || taskTitle,
+                      category: 'cross_app',
+                      sourceApp,
+                      targetApp,
+                      status: 'in_progress',
+                      currentStepIndex: 0,
+                      steps: autoSteps,
+                      startedAt: nowClock,
+                      logs: [
+                        `[${nowClock}] [TaskEngine] Auto-detected task: "${taskTitle}"`,
+                        `[${nowClock}] [TaskEngine] Decomposed into ${autoSteps.length} atomic sub-problems.`,
+                        `[${nowClock}] [TaskEngine] Starting Sub-problem 1: ${autoSteps[0].title}`
+                      ]
+                    };
+                    tasksRef.current = [autoTask, ...tasksRef.current];
+                    setTasks(tasksRef.current);
+                  }
                 }
               }
               if (!userHasSpokenRef.current && !hasActiveTask) {
@@ -1255,19 +1279,58 @@ export function useLiveSession() {
                 // Keep history clean (only last 15 seconds)
                 recentToolCallsRef.current = recentToolCallsRef.current.filter(t => (now - t.time) < 15000);
 
-                // ANTI-HALLUCINATION GATE: Prevent spontaneous tool execution on incomplete input, compliment, or unrequested sites
+                // ANTI-HALLUCINATION GATE: Prevent spontaneous tool execution on incomplete input, compliment, testing banter, or unrequested sites
                 const lastUserSpeech = (lastUserSpeechRef.current || pendingUserDraftRef.current || '').trim().toLowerCase();
                 const isIncompleteCommand = /\b(your\s+second|second|next|and\s+then|also|to|so)\s*$/i.test(lastUserSpeech);
                 const isPureCompliment = /^(okay|ok|well\s+done|good\s+job|great|nice|shabash|shukriya|thanks|thank\s+you|awesome|mast|badhiya)\s*[.,!]*$/i.test(lastUserSpeech);
+                const isTestingBanter = /^(okay\s*,?\s*)?(to\s+)?(aaj\s+)?kuch\s+(naya\s+)?(sa\s+)?karte\s+hain|tumhara\s+(pura\s+)?test\s+lete\s+hain|let('s|\s+us)\s+(have\s+a\s+|do\s+a\s+)?(quick\s+)?test|ready\s+for\s+a\s+test/i.test(lastUserSpeech);
 
-                if (isIncompleteCommand || isPureCompliment) {
-                  if (call.name === 'browser_navigate' || call.name === 'browser_new_tab' || call.name === 'send_email' || call.name === 'confirm_and_send_email' || (call.name === 'desktopAction' && (call.args as any)?.actionName === 'open_app')) {
-                    console.warn(`[AntiHallucinationGate] Blocked action (${call.name}) because user input was incomplete or just appreciation: "${pendingUserDraftRef.current}"`);
+                if (isIncompleteCommand || isPureCompliment || isTestingBanter) {
+                  if (call.name === 'browser_navigate' || call.name === 'browser_new_tab' || call.name === 'browser_fill_form' || call.name === 'send_email' || call.name === 'confirm_and_send_email' || (call.name === 'desktopAction' && (call.args as any)?.actionName === 'open_app')) {
+                    console.warn(`[AntiHallucinationGate] Blocked action (${call.name}) because user input was incomplete, banter, or appreciation: "${pendingUserDraftRef.current}"`);
                     responses.push({
                       id: call.id || "1",
                       name: call.name,
                       response: {
-                        error: `Action blocked: Krish said "${pendingUserDraftRef.current}" which is incomplete or just appreciation. Krish did NOT ask to open any website, app, or email. Do NOT execute any tool! Simply respond verbally in Hindi asking Krish to state the full command.`
+                        error: `Action blocked: Krish said "${pendingUserDraftRef.current}" which is casual conversation, testing banter, or appreciation. Krish did NOT ask to open any website, app, or email. Do NOT execute any automated tools! Simply respond verbally in Hindi with playful confidence asking Krish what specific task to perform.`
+                      }
+                    });
+                    continue;
+                  }
+                }
+
+                // STRICT DEMO FORM / DEMOQA SAFETY GATE: Prevent spontaneous navigation or form filling without explicit user command
+                if (call.name === 'browser_navigate' || call.name === 'browser_new_tab') {
+                  const targetUrl = ((call.args as any)?.url || '').toLowerCase();
+                  if (targetUrl.includes('demoqa')) {
+                    const isExplicitDemoForm = /\b(demoform|demo form|practice form|form|demoqa)\b/i.test(lastUserSpeech);
+                    if (!isExplicitDemoForm) {
+                      console.warn(`[AntiHallucinationGate] Blocked hallucinated navigation to DemoQA. User speech was: "${pendingUserDraftRef.current}"`);
+                      responses.push({
+                        id: call.id || "1",
+                        name: call.name,
+                        response: {
+                          error: `Action blocked: Krish did not ask to open DemoQA or fill a form (User speech was: "${pendingUserDraftRef.current}"). Do NOT navigate to demoqa.com or trigger form automation based on casual chat, memory facts, or unrelated commands!`
+                        }
+                      });
+                      continue;
+                    }
+                  }
+                }
+
+                if (call.name === 'browser_fill_form') {
+                  const isExplicitDemoForm = /\b(demoform|demo form|practice form|form|demoqa)\b/i.test(lastUserSpeech);
+                  const hasActiveDemoTask = tasksRef.current.some(t => 
+                    (t.status === 'in_progress' || t.status === 'healing') && 
+                    /\b(demoform|demo form|practice form|demoqa)\b/i.test(t.title + ' ' + t.goal)
+                  );
+                  if (!isExplicitDemoForm && !hasActiveDemoTask) {
+                    console.warn(`[AntiHallucinationGate] Blocked hallucinated browser_fill_form. User speech was: "${pendingUserDraftRef.current}"`);
+                    responses.push({
+                      id: call.id || "1",
+                      name: call.name,
+                      response: {
+                        error: `Action blocked: Form filling was not authorized by Krish (User speech was: "${pendingUserDraftRef.current}"). Do NOT fill forms spontaneously!`
                       }
                     });
                     continue;
@@ -1461,6 +1524,45 @@ export function useLiveSession() {
     try {
       // Milestone 4: Multi-Step Task Planning & Sub-Problem Execution
       if (name === 'plan_workflow_task') {
+        const title = (args.title || 'Multi-Step Autonomous Workflow').trim();
+        const goal = (args.goal || 'Execute user requested task decomposition.').trim();
+        const speech = (lastUserSpeechRef.current || pendingUserDraftRef.current || '').toLowerCase();
+
+        // 1. Strict validation: If the planned task is DemoQA / Practice Form, verify explicit user intent in speech!
+        const isDemoFormTask = title.toLowerCase().includes('demo') || goal.toLowerCase().includes('demo') || JSON.stringify(args.steps || {}).toLowerCase().includes('demoqa');
+        if (isDemoFormTask) {
+          const hasExplicitIntent = /\b(demoform|demo form|practice form|form|demoqa)\b/i.test(speech);
+          if (!hasExplicitIntent) {
+            console.warn(`[PlanTaskGate] Blocked plan_workflow_task for DemoQA because speech lacked explicit form intent. Speech: "${speech}"`);
+            return {
+              id: callId,
+              name,
+              response: {
+                error: `Action blocked: Cannot plan DemoQA practice form task because Krish did not ask to fill a form or open DemoQA (Krish's speech: "${pendingUserDraftRef.current || lastUserSpeechRef.current}"). Do NOT trigger workflows from casual chat, testing banter, or memory!`
+              }
+            };
+          }
+        }
+
+        // 2. Task Deduplication: Prevent duplicate tasks if an identical or similar task was registered recently
+        const existingSimilar = tasksRef.current.find(t => {
+          const titleMatch = t.title.toLowerCase().trim() === title.toLowerCase().trim();
+          const goalMatch = t.goal.toLowerCase().trim() === goal.toLowerCase().trim();
+          const isRecent = t.status === 'in_progress' || t.status === 'healing' || t.status === 'completed';
+          return (titleMatch || goalMatch) && isRecent;
+        });
+
+        if (existingSimilar) {
+          console.log(`[PlanTaskGate] Deduplicated plan_workflow_task: matching task already exists (${existingSimilar.id}).`);
+          return {
+            id: callId,
+            name,
+            response: {
+              result: `Task already registered as "${existingSimilar.title}". Continuing execution with existing task plan.`
+            }
+          };
+        }
+
         const newTaskId = 'task_' + Date.now();
         const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const rawSteps = Array.isArray(args.steps) ? args.steps : [];
@@ -1479,8 +1581,8 @@ export function useLiveSession() {
 
         const newTask: AutomatedTask = {
           id: newTaskId,
-          title: args.title || 'Multi-Step Autonomous Workflow',
-          goal: args.goal || 'Execute user requested task decomposition.',
+          title: title,
+          goal: goal,
           category: args.category || 'cross_app',
           sourceApp: args.sourceApp || 'Active App',
           targetApp: args.targetApp || 'Target App',
@@ -1489,13 +1591,14 @@ export function useLiveSession() {
           steps: parsedSteps,
           startedAt: now,
           logs: [
-            `[${now}] [WorkflowEngine] Task registered: "${args.title}"`,
+            `[${now}] [WorkflowEngine] Task registered: "${title}"`,
             `[${now}] [WorkflowEngine] Decomposed into ${parsedSteps.length} discrete atomic sub-problems with verification criteria.`,
             `[${now}] [WorkflowEngine] Starting Sub-problem 1: ${parsedSteps[0]?.title || 'Step 1'}`
           ]
         };
 
-        setTasks(prev => [newTask, ...prev]);
+        tasksRef.current = [newTask, ...tasksRef.current];
+        setTasks(tasksRef.current);
         setCurrentTab('tasks');
 
         return {
