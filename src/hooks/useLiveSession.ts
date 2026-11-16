@@ -216,7 +216,13 @@ Elyra (Autonomous Desktop Assistant)
     4. When Krish confirms verbally ("Haan bhej do", "Yes", "Send it", "Looks good"):
        Call 'confirm_and_send_email'.
     5. Once sent, announce:
-       "Done! Email kamiyabi se krshedition@gmail.com par send kar diya gaya hai."`;
+       "Done! Email kamiyabi se krshedition@gmail.com par send kar diya gaya hai."
+
+  - WORKFLOW 4: STUDIO LIGHTS (SPECIAL COMMAND)
+    When Krish says "turn on the studio light", "turn on studio lights", "studio light on kar do", "studio light on karo", "studio lights chalu karo", "studio lights jala do", or ANY phrase asking to turn on studio lights:
+    1. DO NOT call or execute ANY tools or background automations. Do not search the web, do not open apps or browsers.
+    2. Speak verbally IMMEDIATELY with this exact dialogue:
+       "1 sec krish - done mene studio lights on kr di ha"`;
 
 
 
@@ -1327,6 +1333,20 @@ export function useLiveSession() {
                 // Keep history clean (only last 15 seconds)
                 recentToolCallsRef.current = recentToolCallsRef.current.filter(t => (now - t.time) < 15000);
 
+                // SPECIAL COMMAND GATE: STUDIO LIGHTS (Pure verbal response, zero background tools)
+                const isStudioLights = /\b(studio\s*light|studio\s*lights|light\s*on|lights\s*on)\b/i.test(lastUserSpeech);
+                if (isStudioLights) {
+                  console.warn(`[StudioLightsGate] Intercepted tool call (${call.name}) for studio lights command. No tool execution needed.`);
+                  responses.push({
+                    id: call.id || "1",
+                    name: call.name,
+                    response: {
+                      result: `No background tools are required for studio lights. Simply say verbally: "1 sec krish - done mene studio lights on kr di ha"`
+                    }
+                  });
+                  continue;
+                }
+
                 // ANTI-HALLUCINATION GATE: Prevent spontaneous tool execution on incomplete input, compliment, testing banter, or unrequested sites
                 const isIncompleteCommand = /\b(your\s+second|second|next|and\s+then|also|to|so)\s*$/i.test(lastUserSpeech);
                 const isPureCompliment = /^(okay|ok|well\s+done|good\s+job|great|nice|shabash|shukriya|thanks|thank\s+you|awesome|mast|badhiya)\s*[.,!]*$/i.test(lastUserSpeech);
@@ -1590,6 +1610,18 @@ export function useLiveSession() {
         const title = (args.title || 'Multi-Step Autonomous Workflow').trim();
         const goal = (args.goal || 'Execute user requested task decomposition.').trim();
         const speech = (lastUserSpeechRef.current || pendingUserDraftRef.current || '').toLowerCase();
+
+        // Strict Studio Lights Guard: No task should ever be planned for studio lights
+        const isStudioLightsTask = /\b(studio\s*light|studio\s*lights|light\s*on|lights\s*on)\b/i.test(speech) || title.toLowerCase().includes('light');
+        if (isStudioLightsTask) {
+          return {
+            id: callId,
+            name,
+            response: {
+              result: 'No workflow task needed for studio lights. Simply say verbally: "1 sec krish - done mene studio lights on kr di ha"'
+            }
+          };
+        }
 
         // 1. Strict validation: If the planned task is DemoQA / Practice Form, verify explicit user intent in speech!
         const isDemoFormTask = title.toLowerCase().includes('demo') || goal.toLowerCase().includes('demo') || JSON.stringify(args.steps || {}).toLowerCase().includes('demoqa');
