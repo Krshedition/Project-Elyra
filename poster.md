@@ -176,28 +176,7 @@ Replaces probabilistic single-query responses with a structured, multi-angle exp
 
 ---
 
-# [SECTION 8] APPLICATION SCREENSHOTS & UI SHOWCASE
-
-The poster integrates real production screenshots captured during live verification runs of Project Elyra:
-
-### Figure 1: Interactive Headless Email Workspace & Human-in-the-Loop Gate
-![Figure 1: Interactive Email Workspace](file:///c:/Users/Krish%20Bhutiya/Desktop/Krish%20Codes/Project%20Elyra/public/poster_assets/email_workspace.jpg)
-- **Visual Highlights:** Shows the modern dark-themed glassmorphism interface (`#0B0E17`), Google-verified identity badge, composed draft to mentor Rahul Sharma, and the orbital voice HUD.
-- **Safety Proof:** Highlights the active verification stepper: *Found Rahul Sharma (✔)*, *Created subject (✔)*, *Wrote message (✔)*, *Reviewed content (✔)*, and the critical **"Waiting for your approval"** state requiring explicit user authorization before transmission.
-
-### Figure 2: Autonomous Multi-Step Task Decomposition & DemoQA Automation
-![Figure 2: Multi-Step Task Decomposition](file:///c:/Users/Krish%20Bhutiya/Desktop/Krish%20Codes/Project%20Elyra/public/poster_assets/task_decomposition.jpg)
-- **Visual Highlights:** Demonstrates natural Hindi voice command parsing (*"Okay, to aaj kuch jo hai naya sa karte hain. Like tumhara pura ka pura test lete hain. A to Z."*) decomposed into 3 atomic, sequential sub-problems.
-- **Verification Proof:** Live verification badges for DOM tree indexing, element tagging, and automated completion of the DemoQA practice form with live streaming IPC execution trace.
-
-### Figure 3: Deterministic Deep Research to Desktop Notepad Injection
-![Figure 3: Deep Research to Notepad](file:///c:/Users/Krish%20Bhutiya/Desktop/Krish%20Codes/Project%20Elyra/public/poster_assets/research_notepad.jpg)
-- **Visual Highlights:** Illustrates end-to-end multi-app workflow: deterministic multi-source data collection on MITS Gwalior (`web.mitsgwalior.in`, `careers360.com`, `findmycollege.com`), launching Windows Notepad, and injecting synthesized reports via C++ native clipboard acceleration (< 250 ms).
-- **Audit Trail:** Step-level execution timings and real-time backend log streaming preventing blind execution loops.
-
----
-
-# [SECTION 9] REAL-WORLD APPLICATIONS & FUTURE SCOPE
+# [SECTION 8] REAL-WORLD APPLICATIONS & FUTURE SCOPE
 
 ### 🌍 Real-World Applications
 - **Hands-Free Accessibility:** Enables individuals with motor impairments to navigate complex websites, fill forms, and manage emails solely via speech.
@@ -212,7 +191,7 @@ The poster integrates real production screenshots captured during live verificat
 
 ---
 
-# [SECTION 10] CONCLUSION & ACKNOWLEDGEMENTS
+# [SECTION 9] CONCLUSION & ACKNOWLEDGEMENTS
 
 ### 🏁 Conclusion
 Project Elyra successfully demonstrates the convergence of **Real-Time Multimodal LLMs**, **Direct Browser Instrumentation (CDP)**, and **Native OS Control**. By replacing fragile selectors with numbered DOM visual perception, anchoring execution in a deterministic task engine, and enforcing strict human-in-the-loop safety boundaries, Elyra provides a robust blueprint for the next generation of autonomous desktop companions.
@@ -222,7 +201,7 @@ I express my deepest gratitude to my project supervisor, **Dr. Rahul Kumar Sharm
 
 ---
 
-# [SECTION 11] REPOSITORY & QR CODE ARTIFACT
+# [SECTION 10] REPOSITORY & QR CODE ARTIFACT
 
 ```
 +-------------------------------------------------------------------+
@@ -252,10 +231,9 @@ I express my deepest gratitude to my project supervisor, **Dr. Rahul Kumar Sharm
 |    (Mermaid / Block Diagram)    |    • 4-Pillar Deep Research     |
 | 4. TECHNOLOGY STACK TABLE       |    • Native C++ Kernel Addon    |
 |---------------------------------|---------------------------------|
-| 6. APPLICATION SCREENSHOTS      | 7. EXPERIMENTAL RESULTS & STATS |
-|    • Figure 1: Voice Orb HUD    |    (Latency, Accuracy, Security)|
-|    • Figure 2: Email Workspace  | 8. REAL-WORLD APPLICATIONS      |
-|    • Figure 3: Task Stepper     | 9. FUTURE SCOPE & CONCLUSION    |
+| 6. EXPERIMENTAL RESULTS MATRIX  | 7. REAL-WORLD APPLICATIONS      |
+|    • Latency & Accuracy Stats   | 8. FUTURE SCOPE & ROADMAP       |
+|    • Milestone Verification     | 9. CONCLUSION & ACKNOWLEDGEMENTS|
 +---------------------------------+---------------------------------+
 | [MITS Deemed University]  REFERENCES & QR CODE [GitHub Repository]|
 +-------------------------------------------------------------------+
