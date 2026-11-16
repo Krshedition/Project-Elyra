@@ -135,18 +135,20 @@ CRITICAL VOICE COMMAND & MULTI-STEP PROTOCOL:
   - NATURAL DEMO BEHAVIOR: Behave completely naturally, witty, and reactive at all times. NEVER anticipate, announce, or speak about these tasks during startup or idle chit-chat. Greet with "Jai Shree Krishna Krish! Main hoon Elyra. Aaj kya karne ka plan hai?" and wait silently for Krish. You act as though each task is assigned for the first time when Krish speaks to you in front of his teachers. You possess the internal memory to execute them smoothly with zero hesitation.
 
   - WORKFLOW 1: DEMO FORM AUTOMATION (MANDATORY SOLE TARGET: DEMOQA)
-    Whenever Krish commands to "fill demo form", "open one of the demoform website and fill that", "open demoform website and fill that", "demo form bhar do", "practice form fill karo", or ANY variation of demo form:
-    1. MANDATORY SOLE TARGET SITE RULE: You MUST open this site ONLY: 'https://demoqa.com/automation-practice-form'. You are strictly forbidden from searching Google or navigating to any other form website!
-    2. Navigate via 'browser_navigate' directly to 'https://demoqa.com/automation-practice-form' in Brave.
-    3. Inspect/index interactive elements using 'browser_analyze_page'.
-    4. Fill the registration form fields cleanly via 'browser_fill_form' or 'browser_type_input':
-       - First Name: 'Krish' (selector: '#firstName' or its element ID)
-       - Last Name: 'Bhutiya' (selector: '#lastName' or its element ID)
-       - Email: 'krshedition@gmail.com' (selector: '#userEmail' or its element ID)
-       - Mobile: '9876543210' (selector: '#userNumber' or its element ID)
-       - Current Address: 'MITS Gwalior Campus, Madhya Pradesh' (selector: '#currentAddress' or its element ID)
-       - Gender: click 'Male' ('browser_click_text' with text: 'Male' or selector 'label[for="gender-radio-1"]')
-    5. Once filled, confirm naturally in Hindi:
+    Whenever Krish commands to "fill demo form", "open one of the demoform website and fill that", "open demoform website and fill that", "demo form bhar do", "practice form fill karo", or asks to "do it again", "phir se karo", "redo the task":
+    1. TARGET URL: Always use 'https://demoqa.com/automation-practice-form' in Brave browser.
+    2. REAL-TIME MULTI-TOOL EXECUTION (DO NOT STOP MID-WAY):
+       - If not already on the page, call 'browser_navigate' to 'https://demoqa.com/automation-practice-form'.
+       - Call 'browser_analyze_page' to tag all interactive elements with high-contrast numbered badges ([1], [2], [3]...). This allows everyone watching to see the visual tags!
+       - Next, call 'browser_fill_form' or 'browser_type_input' using the element IDs to enter Krish's details:
+         • First Name: 'Krish'
+         • Last Name: 'Bhutiya'
+         • Email: 'krshedition@gmail.com'
+         • Mobile: '9876543210'
+         • Current Address: 'MITS Gwalior Campus, Madhya Pradesh'
+       - Call 'browser_click_element' or 'browser_click_text' to select 'Male' (gender).
+       - When Krish says "do it again", "dobara karo", or "phir se karo", DO NOT deflect or stall! Immediately execute 'browser_analyze_page' and re-populate the form fields dynamically!
+    3. Once filled, confirm naturally in Hindi:
        "Maine DemoQA automation practice form successfully open karke fill kar diya hai, Krish! Saari details enter ho chuki hain."
 
   - WORKFLOW 2: NOTEPAD SELF-DESCRIPTION (TECH STACK & ARCHITECTURE)
@@ -1151,10 +1153,12 @@ export function useLiveSession() {
 
               // AUTO-TASK ENGINE: Automatically create and track structured tasks for user commands
               // CRITICAL GUARD: Runs AT MOST ONCE per user command turn, and only if NO task is already active or recently scheduled!
+              const speechForRedo = (pendingUserDraftRef.current || lastUserSpeechRef.current || '').trim().toLowerCase();
+              const isExplicitRedoTurn = /\b(redo|again|repeat|retry|phir\s*se|dobara|wapas|try\s*again|ek\s*baar\s*aur)\b/i.test(speechForRedo);
               const alreadyHandledThisTurn = hasCreatedTaskForCurrentTurnRef.current || !!currentCommandTaskIdRef.current;
               const hasRecentTask = tasksRef.current.some(t => {
                 const age = now - (t.startedAtMs || 0);
-                return age < 45000 || t.status === 'in_progress' || t.status === 'healing';
+                return (age < 45000 && !isExplicitRedoTurn) || t.status === 'in_progress' || t.status === 'healing';
               });
 
               if (!alreadyHandledThisTurn && !hasRecentTask && !hasActiveTask && data.toolCall.functionCalls.length > 0 && !data.toolCall.functionCalls.some((c: any) => c.name === 'plan_workflow_task')) {
@@ -1188,7 +1192,17 @@ export function useLiveSession() {
                       { id: 's2', stepNumber: 2, title: 'Compose & inject requested text', subProblem: 'Write content into Notepad window', status: 'pending', actionName: 'type_text' },
                       { id: 's3', stepNumber: 3, title: 'Verify document presentation', subProblem: 'Ensure text is displayed on screen', status: 'pending', actionName: 'verify_status' }
                     ];
-                  } else if (speechLower.includes('demoform') || speechLower.includes('demo form') || speechLower.includes('practice form') || speechLower.includes('demoqa') || (speechLower.includes('form') && (speechLower.includes('demo') || speechLower.includes('fill')))) {
+                  } else if (
+                    speechLower.includes('demoform') || 
+                    speechLower.includes('demo form') || 
+                    speechLower.includes('practice form') || 
+                    speechLower.includes('demoqa') || 
+                    (speechLower.includes('form') && (speechLower.includes('demo') || speechLower.includes('fill') || speechLower.includes('bhar'))) ||
+                    (isExplicitRedoTurn && (
+                      tasksRef.current.some(t => /\b(demoqa|demoform|demo form|practice form|form)\b/i.test(t.title + ' ' + t.goal)) ||
+                      ((firstCall.args as any)?.url || '').toLowerCase().includes('demoqa')
+                    ))
+                  ) {
                     taskTitle = 'DemoQA: Automated Form Completion';
                     sourceApp = 'Brave Browser';
                     targetApp = 'DemoQA Practice Form';
@@ -1214,7 +1228,7 @@ export function useLiveSession() {
 
                 if (autoSteps.length > 0) {
                   const isDuplicate = tasksRef.current.some(t => 
-                    t.title.toLowerCase().trim() === taskTitle.toLowerCase().trim() && (t.status === 'in_progress' || t.status === 'healing')
+                    !isExplicitRedoTurn && t.title.toLowerCase().trim() === taskTitle.toLowerCase().trim() && (t.status === 'in_progress' || t.status === 'healing')
                   );
                   if (!isDuplicate) {
                     const autoTask: AutomatedTask = {
@@ -1333,7 +1347,9 @@ export function useLiveSession() {
                 }
 
                 // STRICT DEMO FORM / DEMOQA LOCK & SAFETY GATE: Enforce sole target https://demoqa.com/automation-practice-form
-                const isExplicitDemoForm = /\b(demoform|demo form|practice form|demoqa|fill demo form|fill form)\b/i.test(lastUserSpeech);
+                const isExplicitDemoForm = /\b(demoform|demo\s*form|practice\s*form|demoqa|fill\s*form|bhar\s*do|fill\s*demo|form)\b/i.test(lastUserSpeech) ||
+                  (isExplicitRedo && tasksRef.current.some(t => /\b(demoqa|demoform|demo form|practice form|form)\b/i.test(t.title + ' ' + t.goal)));
+
                 if (isExplicitDemoForm) {
                   if (call.name === 'browser_navigate' || call.name === 'browser_new_tab') {
                     const targetUrl = String(((call.args as any)?.url || '')).toLowerCase();
@@ -1354,7 +1370,7 @@ export function useLiveSession() {
                   }
                 } else if (call.name === 'browser_navigate' || call.name === 'browser_new_tab') {
                   const targetUrl = ((call.args as any)?.url || '').toLowerCase();
-                  if (targetUrl.includes('demoqa')) {
+                  if (targetUrl.includes('demoqa') && !isExplicitRedo) {
                     console.warn(`[AntiHallucinationGate] Blocked hallucinated navigation to DemoQA. User speech was: "${pendingUserDraftRef.current}"`);
                     responses.push({
                       id: call.id || "1",
@@ -1368,12 +1384,10 @@ export function useLiveSession() {
                 }
 
                 if (call.name === 'browser_fill_form') {
-                  const isExplicitDemoForm = /\b(demoform|demo form|practice form|form|demoqa)\b/i.test(lastUserSpeech);
-                  const hasActiveDemoTask = tasksRef.current.some(t => 
-                    (t.status === 'in_progress' || t.status === 'healing') && 
+                  const hasDemoTask = tasksRef.current.some(t => 
                     /\b(demoform|demo form|practice form|demoqa)\b/i.test(t.title + ' ' + t.goal)
                   );
-                  if (!isExplicitDemoForm && !hasActiveDemoTask) {
+                  if (!isExplicitDemoForm && !hasDemoTask && !isExplicitRedo && (isIncompleteCommand || isPureCompliment || isTestingBanter)) {
                     console.warn(`[AntiHallucinationGate] Blocked hallucinated browser_fill_form. User speech was: "${pendingUserDraftRef.current}"`);
                     responses.push({
                       id: call.id || "1",
@@ -1876,6 +1890,9 @@ export function useLiveSession() {
         switch (name) {
           case 'browser_navigate':
             result = await ipc.browserNavigate(args.url, args.newTab, args.tabId);
+            if (String(args.url || '').toLowerCase().includes('demoqa.com/automation-practice-form')) {
+              result = `${result}. Page is open. CONTINUOUS EXECUTION: Now call browser_analyze_page to tag elements with numbered badges, then call browser_fill_form or browser_type_input to enter Krish's details.`;
+            }
             break;
           case 'browser_new_tab':
             result = await ipc.browserNewTab(args.url);
@@ -1903,6 +1920,9 @@ export function useLiveSession() {
             break;
           case 'browser_analyze_page':
             result = await ipc.browserAnalyzePage(args.tabId);
+            if (typeof result === 'string' && result.includes('interactive elements')) {
+              result = `${result}. Elements are tagged with numbered badges on screen! CONTINUOUS EXECUTION: Now call browser_fill_form using the field IDs (e.g. First Name, Last Name, Email, Mobile, Current Address) and call browser_click_element for Male radio label.`;
+            }
             break;
           case 'browser_click_element':
             result = await ipc.browserClickElement(args.id, args.tabId);

@@ -2,7 +2,6 @@
 ### Centre for Artificial Intelligence | Madhav Institute of Technology & Science (MITS), Gwalior
 **Student:** Krish Bhutiya (BTAM25O1037) | B.Tech AIML (Sem 3)  
 **Supervisor:** Dr. Rahul Kumar Sharma (Assistant Professor, Centre for AI)  
-**Live Repository:** `https://github.com/Krshedition/Project-Elyra`
 
 ---
 
@@ -76,7 +75,7 @@ THE ELYRA SOLUTION
  └─────────────────────┘    └─────────────────────┘    └─────────────────────┘
 ```
 
-### 🛠️ Minimal Tech Stack
+### 🛠️ Core Tech Stack
 - **AI Brain:** Google Gemini Multimodal Live API (`v1alpha` Bidirectional WebSocket)
 - **Host App:** Electron v30 + React 18 + Tailwind CSS + Vite
 - **Browser Automation:** Playwright + Chromium CDP (`Port 9222`)
@@ -98,20 +97,6 @@ THE ELYRA SOLUTION
 │ 3. NATIVE C++ CLIPBOARD ACCEL.  │ ──> Injects multi-page reports into Notepad in < 250 ms
 │                                 │     using Win32 API, eliminating laptop NumLock flickering.
 └─────────────────────────────────┘
-```
-
----
-
-## 5. KEY BENCHMARK RESULTS (VERIFIED)
-
-| Metric | Traditional Automation | Project Elyra | Why It Matters for Judges |
-| :--- | :--- | :--- | :--- |
-| **Voice Latency** | 1.8 – 2.5 s | **480 – 620 ms** | Real-time conversational responsiveness |
-| **UI Shift Resilience** | 0% (Fails on CSS shift) | **94.2% Success** | Recovers via dynamic numbered re-tagging |
-| **Form Filling Accuracy** | Unsupported via voice | **98.6% Accuracy** | Hands-free DemoQA form automation |
-| **Text Injection Speed** | 3.2 s (WScript SendKeys) | **< 250 ms** | C++ clipboard memory transfer |
-| **Security Test Suite** | Unrestricted scripts | **100% Pass (20/20)**| Strict safety sandboxing & approval gates |
-
 ---
 
 ## 6. REAL-WORLD IMPACT & CONCLUSION
