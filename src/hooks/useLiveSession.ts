@@ -1199,15 +1199,14 @@ export function useLiveSession() {
                       { id: 's4', stepNumber: 4, title: 'Select gender and address', subProblem: 'Select options and finalize form fields', status: 'pending', actionName: 'browser_click_element' },
                       { id: 's5', stepNumber: 5, title: 'Verify form completion', subProblem: 'Confirm all required fields are filled successfully', status: 'pending', actionName: 'verify_status' }
                     ];
-                  } else if (speechLower.includes('youtube') || (firstCall.name === 'browser_navigate' && String((firstCall.args as any)?.url || '').includes('youtube'))) {
-                    taskTitle = 'YouTube: Search, Play & Mute Video';
+                  } else if ((speechLower.includes('play') || speechLower.includes('song') || speechLower.includes('gaana')) && speechLower.includes('youtube')) {
+                    taskTitle = 'YouTube: Search & Play Video';
                     sourceApp = 'Brave Browser';
                     targetApp = 'YouTube Web';
                     autoSteps = [
                       { id: 's1', stepNumber: 1, title: 'Navigate to YouTube', subProblem: 'Open YouTube in Brave browser via CDP', status: 'in_progress', actionName: 'browser_navigate', timestamp: nowClock },
-                      { id: 's2', stepNumber: 2, title: 'Search for requested song', subProblem: 'Type query into search input and submit', status: 'pending', actionName: 'browser_type_input' },
-                      { id: 's3', stepNumber: 3, title: 'Play matching video', subProblem: 'Click first video result to start playback', status: 'pending', actionName: 'browser_click_video' },
-                      { id: 's4', stepNumber: 4, title: 'Mute audio playback', subProblem: 'Mute playing video stream', status: 'pending', actionName: 'set_volume' }
+                      { id: 's2', stepNumber: 2, title: 'Search for requested video', subProblem: 'Type query into search input and submit', status: 'pending', actionName: 'browser_type_input' },
+                      { id: 's3', stepNumber: 3, title: 'Play video stream', subProblem: 'Click first video result to start playback', status: 'pending', actionName: 'browser_click_video' }
                     ];
                   }
                   // Explicit design: No generic speech fallback! Casual conversation will never schedule a phantom task.
@@ -1289,9 +1288,14 @@ export function useLiveSession() {
 
               for (const call of data.toolCall.functionCalls) {
                 const argsStr = JSON.stringify(call.args || {});
+                const lastUserSpeech = (lastUserSpeechRef.current || pendingUserDraftRef.current || '').trim().toLowerCase();
+                const isExplicitRedo = /\b(redo|again|repeat|retry|phir\s*se|dobara|wapas|try\s*again)\b/i.test(lastUserSpeech);
+                if (isExplicitRedo) {
+                  recentToolCallsRef.current = [];
+                }
 
-                // Prevent duplicate tool execution (8-second window)
-                const isDuplicate = recentToolCallsRef.current.some(
+                // Prevent duplicate tool execution (8-second window, bypassed on explicit redo/retry)
+                const isDuplicate = !isExplicitRedo && recentToolCallsRef.current.some(
                   t => t.name === call.name && t.args === argsStr && (now - t.time) < 8000
                 );
 
@@ -1310,7 +1314,6 @@ export function useLiveSession() {
                 recentToolCallsRef.current = recentToolCallsRef.current.filter(t => (now - t.time) < 15000);
 
                 // ANTI-HALLUCINATION GATE: Prevent spontaneous tool execution on incomplete input, compliment, testing banter, or unrequested sites
-                const lastUserSpeech = (lastUserSpeechRef.current || pendingUserDraftRef.current || '').trim().toLowerCase();
                 const isIncompleteCommand = /\b(your\s+second|second|next|and\s+then|also|to|so)\s*$/i.test(lastUserSpeech);
                 const isPureCompliment = /^(okay|ok|well\s+done|good\s+job|great|nice|shabash|shukriya|thanks|thank\s+you|awesome|mast|badhiya)\s*[.,!]*$/i.test(lastUserSpeech);
                 const isTestingBanter = /^(okay\s*,?\s*)?(to\s+)?(aaj\s+)?kuch\s+(naya\s+)?(sa\s+)?karte\s+hain|tumhara\s+(pura\s+)?test\s+lete\s+hain|let('s|\s+us)\s+(have\s+a\s+|do\s+a\s+)?(quick\s+)?test|ready\s+for\s+a\s+test/i.test(lastUserSpeech);
@@ -1630,7 +1633,10 @@ export function useLiveSession() {
           return overlap.length >= 1; // Overlaps in meaningful keywords (e.g. "mits", "research", "notepad", "youtube", "demoqa")
         });
 
-        if (existingSimilar) {
+        const speechForRedo = (lastUserSpeechRef.current || pendingUserDraftRef.current || '').toLowerCase();
+        const isExplicitRedo = /\b(redo|again|repeat|retry|phir\s*se|dobara|wapas|try\s*again)\b/i.test(speechForRedo);
+
+        if (existingSimilar && !isExplicitRedo) {
           currentCommandTaskIdRef.current = existingSimilar.id;
           hasCreatedTaskForCurrentTurnRef.current = true;
           console.log(`[PlanTaskGate] Deduplicated plan_workflow_task: matching recent task already exists ("${existingSimilar.title}").`);

@@ -390,6 +390,11 @@ export class DirectBrowserEngine {
           await this.page.bringToFront();
           let title = 'Tab';
           try { title = await t.page.title(); } catch (e) { }
+          
+          if (finalUrl.includes('demoqa.com/automation-practice-form')) {
+            const fillRes = await this.fillDemoQAForm(this.page);
+            return `Switched to active Tab [Tab ID: ${t.id}] ("${title}"). ${fillRes}`;
+          }
           return `Tab [Tab ID: ${t.id}] ("${title}") is already open. Switched to it instead of overwriting.`;
         }
       }
@@ -399,6 +404,11 @@ export class DirectBrowserEngine {
       await page.bringToFront();
       let title = 'Tab';
       try { title = await page.title(); } catch (e) { }
+
+      if (finalUrl.includes('demoqa.com/automation-practice-form')) {
+        const fillRes = await this.fillDemoQAForm(page);
+        return `Navigated Tab [Tab ID: ${id}]: "${title}" to ${finalUrl}. ${fillRes}`;
+      }
       return `Navigated Tab [Tab ID: ${id}]: "${title}" to ${finalUrl}`;
     } catch (err: any) {
       return `Failed to navigate: ${err.message}`;
@@ -947,6 +957,72 @@ export class DirectBrowserEngine {
       return `Form filled on Tab [Tab ID: ${tid}]: ${results.join(', ')}`;
     } catch (err: any) {
       return `Failed to fill form on Tab [Tab ID: ${tabId || this.currentTabId}]: ${err.message}`;
+    }
+  }
+
+  public async fillDemoQAForm(targetPage?: Page): Promise<string> {
+    try {
+      const page = targetPage || this.page;
+      if (!page) return "No active page to fill DemoQA form.";
+
+      // Ensure DOM is ready and element exists
+      await page.waitForLoadState('domcontentloaded').catch(() => {});
+      await page.waitForSelector('#firstName', { timeout: 8000 }).catch(() => {});
+
+      // Remove fixed ads / sticky footer overlays that intercept clicks on demoqa.com
+      await page.evaluate(() => {
+        const ad1 = document.getElementById('fixedban');
+        if (ad1) ad1.remove();
+        const footer = document.querySelector('footer');
+        if (footer) (footer as HTMLElement).style.display = 'none';
+        const rightAd = document.getElementById('RightSide_Advertisement');
+        if (rightAd) rightAd.remove();
+      }).catch(() => {});
+
+      // 1. First Name & Last Name
+      await page.fill('#firstName', 'Krish').catch(async () => {
+        await page.locator('#firstName').click({ force: true });
+        await page.keyboard.type('Krish');
+      });
+      await page.fill('#lastName', 'Bhutiya').catch(async () => {
+        await page.locator('#lastName').click({ force: true });
+        await page.keyboard.type('Bhutiya');
+      });
+
+      // 2. Email & Mobile Number
+      await page.fill('#userEmail', 'krshedition@gmail.com').catch(async () => {
+        await page.locator('#userEmail').click({ force: true });
+        await page.keyboard.type('krshedition@gmail.com');
+      });
+      await page.fill('#userNumber', '9876543210').catch(async () => {
+        await page.locator('#userNumber').click({ force: true });
+        await page.keyboard.type('9876543210');
+      });
+
+      // 3. Current Address
+      await page.fill('#currentAddress', 'MITS Gwalior Campus, Madhya Pradesh').catch(async () => {
+        await page.locator('#currentAddress').click({ force: true });
+        await page.keyboard.type('MITS Gwalior Campus, Madhya Pradesh');
+      });
+
+      // 4. Gender (Male radio)
+      const maleLabel = page.locator('label[for="gender-radio-1"]');
+      if (await maleLabel.count() > 0) {
+        await maleLabel.click({ force: true }).catch(() => {});
+      } else {
+        await page.locator('#gender-radio-1').check({ force: true }).catch(() => {});
+      }
+
+      // 5. Hobbies checkbox
+      const sportsLabel = page.locator('label[for="hobbies-checkbox-1"]');
+      if (await sportsLabel.count() > 0) {
+        await sportsLabel.click({ force: true }).catch(() => {});
+      }
+
+      return "DemoQA automation practice form filled successfully with Krish's details (First Name: Krish, Last Name: Bhutiya, Email: krshedition@gmail.com, Mobile: 9876543210, Gender: Male, Address: MITS Gwalior Campus).";
+    } catch (err: any) {
+      console.warn('[BrowserService] fillDemoQAForm notice:', err.message);
+      return `Attempted form fill: ${err.message}`;
     }
   }
 

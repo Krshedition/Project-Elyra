@@ -174,8 +174,13 @@ export function searchFacts(query: string) {
   const factStmt = db.prepare('SELECT category, key, value FROM user_facts WHERE value LIKE @query OR key LIKE @query OR category LIKE @query ORDER BY confidence DESC LIMIT 10');
   const factRows = factStmt.all({ query: `%${query}%` }) as any[];
   
-  const sessStmt = db.prepare('SELECT summary, created_at FROM sessions WHERE summary LIKE @query ORDER BY created_at DESC LIMIT 5');
-  const sessRows = sessStmt.all({ query: `%${query}%` }) as any[];
+  // Only search session archives if user explicitly asks for history/past sessions to prevent past testing tasks from leaking into current commands
+  const isHistoryQuery = /\b(session|history|past|yesterday|previous|kya kiya tha|pehle)\b/i.test(query);
+  let sessRows: any[] = [];
+  if (isHistoryQuery) {
+    const sessStmt = db.prepare('SELECT summary, created_at FROM sessions WHERE summary LIKE @query ORDER BY created_at DESC LIMIT 3');
+    sessRows = sessStmt.all({ query: `%${query}%` }) as any[];
+  }
 
   let resultStr = 'Memory Results:\\n';
   for (const row of factRows) {
