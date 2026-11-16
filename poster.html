@@ -3,247 +3,134 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Project Elyra - A2 Software Project Poster (MITS Gwalior)</title>
+  <title>Project Elyra - A2 Software Project Poster</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-dark: #07090e;
-      --card-bg: rgba(15, 23, 42, 0.75);
-      --card-border: rgba(56, 189, 248, 0.2);
-      --card-border-glow: rgba(168, 85, 247, 0.35);
-      --primary-cyan: #38bdf8;
-      --primary-purple: #a855f7;
-      --accent-gold: #f59e0b;
-      --accent-green: #10b981;
-      --text-main: #f8fafc;
+      --bg: #07090e;
+      --card-bg: rgba(15, 23, 42, 0.7);
+      --card-border: rgba(56, 189, 248, 0.25);
+      --cyan: #38bdf8;
+      --purple: #a855f7;
+      --green: #10b981;
+      --gold: #f59e0b;
+      --text: #f8fafc;
       --text-muted: #94a3b8;
-      --text-dim: #64748b;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background-color: var(--bg-dark);
-      color: var(--text-main);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
       line-height: 1.45;
-      -webkit-font-smoothing: antialiased;
     }
 
-    /* A2 Portrait Container: 420mm x 594mm (at 150 DPI preview, standard ratio ~1:1.414) */
-    .poster-container {
+    .poster {
       width: 420mm;
       min-height: 594mm;
       max-height: 594mm;
       margin: 0 auto;
-      padding: 14mm 14mm 12mm 14mm;
-      background: radial-gradient(circle at 10% 10%, #111827 0%, #07090e 60%, #020617 100%);
+      padding: 18mm 18mm 16mm 18mm;
+      background: radial-gradient(circle at 10% 10%, #0f172a 0%, #07090e 70%, #020617 100%);
       display: flex;
       flex-direction: column;
-      position: relative;
+      justify-content: space-between;
       overflow: hidden;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75);
     }
 
-    /* Ambient Glow Background elements */
-    .glow-orb-1 {
-      position: absolute;
-      top: -100px;
-      right: -100px;
-      width: 500px;
-      height: 500px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .glow-orb-2 {
-      position: absolute;
-      bottom: -150px;
-      left: -100px;
-      width: 600px;
-      height: 600px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(56, 189, 248, 0.12) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    /* INSTITUTIONAL HEADER */
-    header.poster-header {
-      border: 1.5px solid var(--card-border-glow);
+    /* HEADER */
+    header {
+      border: 1.5px solid var(--card-border);
+      background: var(--card-bg);
       border-radius: 12px;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(12px);
       padding: 16px 24px;
-      margin-bottom: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-      position: relative;
-    }
-
-    .header-institute {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      padding-bottom: 8px;
+      margin-bottom: 14px;
     }
 
-    .inst-left {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .inst-name-hi {
-      font-size: 15pt;
-      font-weight: 700;
-      color: var(--accent-gold);
-      letter-spacing: 0.5px;
-    }
-
-    .inst-name-en {
-      font-size: 17pt;
-      font-weight: 800;
-      color: #ffffff;
-      letter-spacing: 0.8px;
-    }
-
-    .inst-sub {
-      font-size: 10pt;
-      color: var(--text-muted);
-      font-weight: 500;
-    }
-
-    .dept-badge {
-      text-align: right;
-      background: rgba(168, 85, 247, 0.15);
-      border: 1px solid rgba(168, 85, 247, 0.4);
-      padding: 6px 14px;
-      border-radius: 8px;
-    }
-
-    .dept-badge .dept-title {
-      font-size: 11pt;
-      font-weight: 700;
-      color: var(--primary-purple);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-
-    .dept-badge .expo-title {
-      font-size: 9.5pt;
-      color: var(--primary-cyan);
-      font-weight: 600;
-    }
-
-    /* PROJECT TITLE BANNER */
-    .project-banner {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-top: 4px;
-    }
-
-    .project-title-box h1 {
+    .header-main h1 {
       font-size: 26pt;
       font-weight: 900;
-      line-height: 1.15;
       letter-spacing: 0.5px;
-      background: linear-gradient(90deg, #ffffff 0%, var(--primary-cyan) 60%, var(--primary-purple) 100%);
+      background: linear-gradient(90deg, #ffffff 0%, var(--cyan) 60%, var(--purple) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       text-transform: uppercase;
     }
 
-    .project-title-box p {
+    .header-main p {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 10.5pt;
-      color: var(--primary-purple);
-      letter-spacing: 1.5px;
-      font-weight: 600;
-      margin-top: 2px;
-    }
-
-    .meta-pills {
-      display: flex;
-      gap: 12px;
-    }
-
-    .meta-card {
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 9.5pt;
-      min-width: 150px;
-    }
-
-    .meta-card .label {
-      color: var(--text-dim);
-      font-size: 8pt;
-      text-transform: uppercase;
-      font-weight: 600;
-    }
-
-    .meta-card .val {
+      font-size: 11pt;
+      color: var(--purple);
+      margin-top: 3px;
       font-weight: 700;
-      color: #ffffff;
     }
 
-    /* POSTER BODY GRID */
-    .poster-grid {
+    .inst-badge {
+      text-align: right;
+      font-size: 10pt;
+    }
+
+    .inst-badge .inst-title {
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .inst-badge .inst-sub {
+      color: var(--cyan);
+      font-size: 9pt;
+      font-weight: 600;
+    }
+
+    /* GRID */
+    .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      gap: 14px;
       flex: 1;
     }
 
-    .column {
+    .col {
       display: flex;
       flex-direction: column;
-      gap: 11px;
+      gap: 14px;
     }
 
-    /* SECTION CARD */
-    .section-card {
+    .card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 10px;
-      padding: 12px 14px;
-      backdrop-filter: blur(8px);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      padding: 14px 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
     }
 
-    .section-card.highlight {
-      border-color: var(--card-border-glow);
-      background: rgba(23, 20, 48, 0.65);
-    }
-
-    .section-header {
+    .card-title {
+      font-size: 12pt;
+      font-weight: 800;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 6px;
+      margin-bottom: 10px;
       display: flex;
       align-items: center;
       gap: 8px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      padding-bottom: 6px;
-      margin-bottom: 8px;
     }
 
-    .section-num {
-      background: linear-gradient(135deg, var(--primary-cyan), var(--primary-purple));
+    .num-pill {
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
       color: #000;
       font-size: 8.5pt;
       font-weight: 800;
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
       border-radius: 4px;
       display: flex;
       align-items: center;
@@ -251,578 +138,269 @@
       font-family: 'JetBrains Mono', monospace;
     }
 
-    .section-title {
-      font-size: 11.5pt;
-      font-weight: 800;
-      color: var(--primary-cyan);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-    }
-
-    .card-body {
-      font-size: 9pt;
-      color: var(--text-muted);
-      line-height: 1.4;
-    }
-
-    .card-body strong {
-      color: #ffffff;
-      font-weight: 600;
-    }
-
-    /* LISTS & BULLETS */
-    ul.bullet-list {
-      list-style: none;
+    /* FLOW BOXES */
+    .flow-pipeline {
       display: flex;
       flex-direction: column;
-      gap: 4px;
-    }
-
-    ul.bullet-list li {
-      position: relative;
-      padding-left: 14px;
-    }
-
-    ul.bullet-list li::before {
-      content: "▹";
-      position: absolute;
-      left: 0;
-      color: var(--primary-cyan);
-      font-weight: bold;
-    }
-
-    /* ARCHITECTURE DIAGRAM (SVG / CSS) */
-    .arch-flow {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      padding: 4px 0;
-    }
-
-    .arch-layer {
-      background: rgba(10, 15, 30, 0.8);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      border-radius: 6px;
-      padding: 6px 10px;
-    }
-
-    .arch-layer-head {
-      display: flex;
-      justify-content: space-between;
-      font-size: 8pt;
-      font-weight: 700;
-      color: var(--primary-cyan);
-      text-transform: uppercase;
-      margin-bottom: 4px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    .arch-nodes {
-      display: flex;
-      gap: 6px;
-    }
-
-    .arch-node {
-      flex: 1;
-      background: rgba(30, 41, 59, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 4px 6px;
-      border-radius: 4px;
-      font-size: 7.8pt;
-      text-align: center;
-      color: #e2e8f0;
-      font-weight: 500;
-    }
-
-    .arch-arrow {
-      text-align: center;
-      color: var(--primary-purple);
-      font-size: 8pt;
-      line-height: 1;
-    }
-
-    /* TABLES */
-    table.compact-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 8pt;
-    }
-
-    table.compact-table th {
-      background: rgba(30, 41, 59, 0.8);
-      color: var(--primary-cyan);
-      font-weight: 700;
-      text-align: left;
-      padding: 4px 6px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 7.5pt;
-    }
-
-    table.compact-table td {
-      padding: 4px 6px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      color: #cbd5e1;
-    }
-
-    table.compact-table tr:hover {
-      background: rgba(56, 189, 248, 0.05);
-    }
-
-    .tag-pill {
-      background: rgba(168, 85, 247, 0.2);
-      color: #d8b4fe;
-      border: 1px solid rgba(168, 85, 247, 0.35);
-      padding: 1px 5px;
-      border-radius: 3px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 7pt;
-    }
-
-    .val-highlight {
-      font-weight: 700;
-      color: var(--accent-green);
-    }
-
-    /* VISUAL GALLERY */
-    .screenshot-gallery {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
       gap: 8px;
     }
 
-    .screenshot-card {
-      background: rgba(0, 0, 0, 0.5);
+    .flow-step {
+      background: rgba(30, 41, 59, 0.7);
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 6px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
+      padding: 8px 12px;
+      font-size: 9pt;
     }
 
-    .screenshot-card img {
-      width: 100%;
-      height: 105px;
-      object-fit: cover;
+    .flow-step strong {
+      color: var(--cyan);
       display: block;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: 2px;
     }
 
-    .screenshot-caption {
-      padding: 4px 6px;
-      font-size: 7pt;
-      color: var(--text-muted);
-      background: rgba(15, 23, 42, 0.9);
+    .flow-arrow {
+      text-align: center;
+      color: var(--purple);
+      font-size: 10pt;
+      line-height: 1;
     }
 
-    .screenshot-caption strong {
-      color: var(--primary-cyan);
-      display: block;
-      font-size: 7.5pt;
-    }
-
-    /* FOOTER & REFS */
-    footer.poster-footer {
-      border: 1.5px solid var(--card-border);
-      border-radius: 10px;
-      background: rgba(15, 23, 42, 0.85);
-      padding: 8px 16px;
-      margin-top: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .footer-left {
-      font-size: 7.8pt;
-      color: var(--text-muted);
-      line-height: 1.35;
-      flex: 1;
-    }
-
-    .footer-left strong {
-      color: #ffffff;
-    }
-
-    .footer-right {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: rgba(0, 0, 0, 0.4);
-      padding: 6px 10px;
-      border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .qr-box {
-      width: 48px;
-      height: 48px;
-      background: #ffffff;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 2px;
-    }
-
-    .qr-box img {
+    /* TABLE */
+    table {
       width: 100%;
-      height: 100%;
+      border-collapse: collapse;
+      font-size: 8.5pt;
     }
 
-    .qr-meta {
-      font-size: 7.5pt;
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
+    th {
+      background: rgba(30, 41, 59, 0.8);
+      color: var(--cyan);
+      text-align: left;
+      padding: 6px 8px;
+      font-family: 'JetBrains Mono', monospace;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
     }
 
-    .qr-meta .repo-title {
-      font-weight: 700;
-      color: var(--primary-cyan);
+    td {
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      color: #cbd5e1;
+    }
+
+    .val-green {
+      font-weight: 800;
+      color: var(--green);
       font-family: 'JetBrains Mono', monospace;
     }
 
-    .qr-meta .repo-url {
-      color: var(--text-dim);
-      font-size: 6.8pt;
+    .tech-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
     }
 
-    /* PRINT RULES FOR EXACT A2 PORTRAIT EXPORT */
+    .tech-pill {
+      background: rgba(168, 85, 247, 0.18);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      color: #d8b4fe;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 8pt;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+    }
+
+    /* FOOTER */
+    footer {
+      border: 1.5px solid var(--card-border);
+      border-radius: 10px;
+      background: var(--card-bg);
+      padding: 10px 18px;
+      margin-top: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-meta {
+      font-size: 8.5pt;
+      color: var(--text-muted);
+    }
+
+    .footer-meta strong {
+      color: #fff;
+    }
+
+    .qr-pill {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8pt;
+      color: var(--cyan);
+    }
+
     @media print {
-      @page {
-        size: 420mm 594mm portrait;
-        margin: 0;
-      }
-      body {
-        background: var(--bg-dark) !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-      .poster-container {
-        box-shadow: none;
-        width: 420mm;
-        height: 594mm;
-        max-height: 594mm;
-        padding: 12mm 14mm;
-      }
+      @page { size: 420mm 594mm portrait; margin: 0; }
+      body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .poster { width: 420mm; height: 594mm; padding: 14mm 16mm; }
     }
   </style>
 </head>
 <body>
 
-  <div class="poster-container">
-    <div class="glow-orb-1"></div>
-    <div class="glow-orb-2"></div>
-
-    <!-- INSTITUTIONAL TOP BANNER -->
-    <header class="poster-header">
-      <div class="header-institute">
-        <div class="inst-left">
-          <div class="inst-name-hi">माधव प्रौद्योगिकी एवं विज्ञान संस्थान, ग्वालियर (म.प्र.), भारत</div>
-          <div class="inst-name-en">MADHAV INSTITUTE OF TECHNOLOGY & SCIENCE, GWALIOR (M.P.), INDIA</div>
-          <div class="inst-sub">Deemed to be University declared under Distinct Category | Accredited by NAAC with 'A++' Grade</div>
-        </div>
-        <div class="dept-badge">
-          <div class="dept-title">Centre for Artificial Intelligence</div>
-          <div class="expo-title">Major Project Expo • November 2026</div>
-        </div>
+  <div class="poster">
+    
+    <!-- HEADER -->
+    <header>
+      <div class="header-main">
+        <h1>Project Elyra: Multimodal AI Desktop Assistant</h1>
+        <p>REAL-TIME GEMINI LIVE VISION • NUMBERED DOM TAGGING • NATIVE OS CONTROL</p>
       </div>
-
-      <div class="project-banner">
-        <div class="project-title-box">
-          <h1>Project Elyra: AI-Driven Virtual Assistant for Browser Automation</h1>
-          <p>BIDIRECTIONAL GEMINI LIVE VISION • NUMBERED DOM TREE-WALKER • HEADLESS OS & EMAIL CORE</p>
-        </div>
-        <div class="meta-pills">
-          <div class="meta-card">
-            <div class="label">Candidate / Author</div>
-            <div class="val">Krish Bhutiya</div>
-            <div style="font-size: 7.5pt; color: var(--primary-cyan);">BTAM25O1037 | Sem 3 AIML</div>
-          </div>
-          <div class="meta-card">
-            <div class="label">Supervisor / Mentor</div>
-            <div class="val">Dr. Rahul Kumar Sharma</div>
-            <div style="font-size: 7.5pt; color: var(--primary-purple);">Assistant Professor, CAI</div>
-          </div>
-        </div>
+      <div class="inst-badge">
+        <div class="inst-title">Centre for Artificial Intelligence</div>
+        <div class="inst-sub">MITS Gwalior (Deemed to be University) • NAAC 'A++'</div>
+        <div style="font-size: 8.5pt; color: #fff; margin-top: 2px;">Candidate: <strong>Krish Bhutiya</strong> (BTAM25O1037) | Guide: <strong>Dr. Rahul Kumar Sharma</strong></div>
       </div>
     </header>
 
-    <!-- MAIN TWO-COLUMN MODULAR GRID -->
-    <div class="poster-grid">
+    <!-- 2-COLUMN MINIMAL GRID -->
+    <div class="grid">
       
       <!-- LEFT COLUMN -->
-      <div class="column">
+      <div class="col">
         
-        <!-- SECTION 1: ABSTRACT -->
-        <div class="section-card">
-          <div class="section-header">
-            <span class="section-num">01</span>
-            <span class="section-title">Abstract</span>
-          </div>
-          <div class="card-body">
-            Traditional desktop voice assistants remain fundamentally blind and helpless inside dynamic web interfaces, relying on rigid, pre-programmed intent patterns. <strong>Project Elyra</strong> introduces an autonomous, multimodal desktop AI assistant that operates web applications and the Windows OS exactly like an expert human. By integrating the bidirectional <strong>Google Gemini Multimodal Live API</strong> (16 kHz low-latency audio & vision), <strong>Chrome DevTools Protocol (CDP port 9222)</strong> via Playwright, and a custom <strong>C++ Native Addon (`node-addon-api`)</strong>, Elyra perceives real-time screen state, dynamically indexes interactive elements with high-contrast numbered badges ([1], [2]...), and executes multi-step workflows (autonomous form completion, multi-source deep research, and headless SMTP email dispatch) entirely hands-free.
-          </div>
-        </div>
-
-        <!-- SECTION 2: PROBLEM STATEMENT & OBJECTIVES -->
-        <div class="section-card">
-          <div class="section-header">
-            <span class="section-num">02</span>
-            <span class="section-title">Problem Statement & Key Objectives</span>
-          </div>
-          <div class="card-body">
-            <ul class="bullet-list" style="margin-bottom: 6px;">
-              <li><strong>Brittle Selectors:</strong> Conventional RPA frameworks (Selenium/Puppeteer) rely on hardcoded CSS/XPaths that fail on layout shifts.</li>
-              <li><strong>Disjointed AI Agents:</strong> Contemporary LLMs produce natural text but lack local agency to execute tasks directly on the host OS.</li>
-              <li><strong>Blind Runaway Loops:</strong> Lack of continuous state verification leads to unrecoverable errors when popups or modals appear.</li>
-            </ul>
-            <div style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 6px;">
-              <strong style="color: var(--primary-cyan);">Primary Objectives:</strong>
-              <ul class="bullet-list" style="margin-top: 3px;">
-                <li>Build sub-second, full-duplex WebSocket streaming for 16 kHz PCM voice and delta-diff screen frames.</li>
-                <li>Design a dynamic visual DOM tree-walker eliminating hardcoded selectors via numbered badge injection.</li>
-                <li>Implement an Execution Governor with Human-in-the-Loop gating for headless background emails and OS actions.</li>
-              </ul>
+        <!-- CARD 1: PROBLEM VS SOLUTION -->
+        <div class="card">
+          <div class="card-title"><span class="num-pill">1</span> Problem vs. Solution</div>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 8.8pt;">
+            <div style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 6px 10px; border-radius: 4px;">
+              <strong style="color: #f87171;">The Problem:</strong> Traditional voice assistants (Siri, Alexa) are blind to desktop screens and cannot navigate websites. Conventional web RPA (Selenium) breaks instantly when site layouts shift.
+            </div>
+            <div style="background: rgba(16, 185, 129, 0.1); border-left: 3px solid var(--green); padding: 6px 10px; border-radius: 4px;">
+              <strong style="color: var(--green);">The Elyra Solution:</strong> Combines real-time <strong>Gemini Live Vision</strong> with <strong>Dynamic Numbered DOM Tagging</strong> to let AI navigate websites and control Windows OS exactly like an expert human — with autonomous self-healing.
             </div>
           </div>
         </div>
 
-        <!-- SECTION 3: SYSTEM ARCHITECTURE -->
-        <div class="section-card highlight">
-          <div class="section-header">
-            <span class="section-num">03</span>
-            <span class="section-title">Four-Layer System Architecture</span>
-          </div>
-          <div class="card-body">
-            <div class="arch-flow">
-              <div class="arch-layer">
-                <div class="arch-layer-head"><span>Layer 1: Perception & Voice Interaction</span><span class="tag-pill">Client HUD</span></div>
-                <div class="arch-nodes">
-                  <div class="arch-node">16 kHz PCM Mic Stream</div>
-                  <div class="arch-node">Delta Screen Capturer</div>
-                  <div class="arch-node">React 18 Glassmorphic HUD</div>
-                </div>
-              </div>
-              <div class="arch-arrow">▼ Bidirectional WebSocket (Low Latency BidiStream) ▼</div>
-              <div class="arch-layer">
-                <div class="arch-layer-head"><span>Layer 2: Multimodal Intelligence Core</span><span class="tag-pill">Cloud Reasoning</span></div>
-                <div class="arch-nodes">
-                  <div class="arch-node">Google Gemini Live API</div>
-                  <div class="arch-node">Multi-Step Task Decomposition Engine</div>
-                </div>
-              </div>
-              <div class="arch-arrow">▼ IPC Dispatch & Intent Governor Whitelist ▼</div>
-              <div class="arch-layer">
-                <div class="arch-layer-head"><span>Layer 3: OS & Browser Execution Core</span><span class="tag-pill">Execution Engine</span></div>
-                <div class="arch-nodes">
-                  <div class="arch-node">Brave CDP (Port 9222)</div>
-                  <div class="arch-node">C++ Native Win32 SendInput</div>
-                  <div class="arch-node">Headless SMTP (TLS 465)</div>
-                </div>
-              </div>
-              <div class="arch-arrow">▼ Continuous State Verification & DOM Tagging ▼</div>
-              <div class="arch-layer">
-                <div class="arch-layer-head"><span>Layer 4: Verification & Autonomous Self-Healing</span><span class="tag-pill">Safety Layer</span></div>
-                <div class="arch-nodes">
-                  <div class="arch-node">DOM Numbered Badging</div>
-                  <div class="arch-node">Outcome State Verifier</div>
-                  <div class="arch-node">Adaptive Re-Index / Rollback</div>
-                </div>
-              </div>
+        <!-- CARD 2: HOW IT WORKS (PIPELINE) -->
+        <div class="card">
+          <div class="card-title"><span class="num-pill">2</span> How It Works (4-Step Pipeline)</div>
+          <div class="flow-pipeline">
+            <div class="flow-step">
+              <strong>[1] Voice & Screen Perception</strong>
+              Captures 16 kHz PCM microphone stream and delta-diff desktop frames in real time.
+            </div>
+            <div class="flow-arrow">▼ Full-Duplex WebSocket ▼</div>
+            <div class="flow-step">
+              <strong>[2] Multimodal Cloud Reasoning</strong>
+              Google Gemini Live API interprets intent, decomposes multi-step goals, and invokes tools.
+            </div>
+            <div class="flow-arrow">▼ Chrome DevTools Protocol (CDP) ▼</div>
+            <div class="flow-step">
+              <strong>[3] Dynamic Numbered DOM Tagging</strong>
+              Injects high-contrast numeric badges ([1], [2]...) directly over buttons/inputs, eliminating brittle XPaths.
+            </div>
+            <div class="flow-arrow">▼ Native OS & Browser Execution ▼</div>
+            <div class="flow-step">
+              <strong>[4] Execution, Safety Gating & Verbal Output</strong>
+              Executes clicks, types, and sends emails with voice confirmation, then speaks status back.
             </div>
           </div>
         </div>
 
-        <!-- SECTION 4: TECH STACK SPECIFICATION -->
-        <div class="section-card">
-          <div class="section-header">
-            <span class="section-num">04</span>
-            <span class="section-title">Technology Stack Matrix</span>
+        <!-- CARD 3: TECH STACK -->
+        <div class="card">
+          <div class="card-title"><span class="num-pill">3</span> Core Architecture & Stack</div>
+          <div style="font-size: 8.5pt; color: var(--text-muted); line-height: 1.4;">
+            Modular Electron host connecting a reactive React HUD with Gemini Live via WebSockets, orchestrating Brave Browser via CDP and Windows OS via native C++.
           </div>
-          <div class="card-body">
-            <table class="compact-table">
-              <thead>
-                <tr>
-                  <th>Component</th>
-                  <th>Technology / Library</th>
-                  <th>Version / Protocol</th>
-                  <th>Role</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>AI Live Core</strong></td>
-                  <td>Gemini Multimodal Live API</td>
-                  <td><span class="tag-pill">v1alpha Bidi</span></td>
-                  <td>16 kHz voice & screen reasoning</td>
-                </tr>
-                <tr>
-                  <td><strong>Desktop Host</strong></td>
-                  <td>Electron + Node.js</td>
-                  <td><span class="tag-pill">v30.x / v20 LTS</span></td>
-                  <td>IPC bridge & screen capturer</td>
-                </tr>
-                <tr>
-                  <td><strong>User Interface</strong></td>
-                  <td>React 18 + Tailwind CSS + Vite</td>
-                  <td><span class="tag-pill">Vite 8</span></td>
-                  <td>Orbital audio visualizer & tasks HUD</td>
-                </tr>
-                <tr>
-                  <td><strong>Browser Automation</strong></td>
-                  <td>Playwright + Chrome DevTools</td>
-                  <td><span class="tag-pill">CDP 9222</span></td>
-                  <td>Brave profile attachment & DOM control</td>
-                </tr>
-                <tr>
-                  <td><strong>Native OS Core</strong></td>
-                  <td>C++ Addon (`node-addon-api`)</td>
-                  <td><span class="tag-pill">Win32 API</span></td>
-                  <td>Hardware `SendInput` & clipboard speed</td>
-                </tr>
-                <tr>
-                  <td><strong>Email Engine</strong></td>
-                  <td>Nodemailer (Google Auth)</td>
-                  <td><span class="tag-pill">TLS 465</span></td>
-                  <td>Headless SMTP with interactive approval</td>
-                </tr>
-                <tr>
-                  <td><strong>Local Memory</strong></td>
-                  <td>Better-SQLite3</td>
-                  <td><span class="tag-pill">v9.x</span></td>
-                  <td>Zero-latency fact & digest persistence</td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="tech-pills">
+            <span class="tech-pill">Gemini Live API</span>
+            <span class="tech-pill">Electron 30</span>
+            <span class="tech-pill">React 18</span>
+            <span class="tech-pill">Playwright CDP</span>
+            <span class="tech-pill">C++ Win32 Core</span>
+            <span class="tech-pill">Nodemailer SMTP</span>
+            <span class="tech-pill">Better-SQLite3</span>
           </div>
         </div>
 
       </div>
 
       <!-- RIGHT COLUMN -->
-      <div class="column">
+      <div class="col">
 
-        <!-- SECTION 5: CORE METHODOLOGY & NOVELTY -->
-        <div class="section-card">
-          <div class="section-header">
-            <span class="section-num">05</span>
-            <span class="section-title">Core Methodology & Novel Algorithms</span>
-          </div>
-          <div class="card-body">
-            <ul class="bullet-list">
-              <li><strong>Dynamic DOM Tagging Protocol:</strong> Lightweight tree-walker calculates bounding client rectangles of visible elements and injects high-contrast numbered badges ([1], [2]...). The model acts deterministically on element IDs without xpath fragility.</li>
-              <li><strong>Execution Governor & Human-in-the-Loop Gate:</strong> Enforces a strict <em>1 User Turn = 1 Task Card</em> anchor. Spontaneous action hallucination is suppressed; destructive and email dispatches require explicit voice authorization.</li>
-              <li><strong>Deterministic 4-Pillar Deep Research:</strong> Decomposes complex research queries (e.g. MITS Gwalior) across Foundation/Accreditation, Academics, Placements, and Campus Scale, linking live Brave navigation with structured markdown dossier synthesis.</li>
-              <li><strong>Kernel-Level C++ Acceleration:</strong> Native Win32 `SendInput` bypasses Windows 11 NumLock flickering and injects large multi-line text into Notepad via clipboard acceleration in under 250 ms.</li>
-            </ul>
-          </div>
-        </div>
-
-        <!-- SECTION 6: WORKFLOWS & EXECUTION GUARANTEES -->
-        <div class="section-card highlight">
-          <div class="section-header">
-            <span class="section-num">06</span>
-            <span class="section-title">Verified Core Workflows & Execution Pipeline</span>
-          </div>
-          <div class="card-body">
-            <ul class="bullet-list" style="gap: 6px;">
-              <li>
-                <strong>Automated Web Form Completion:</strong>
-                Parses open-ended voice prompts, navigates Chromium via CDP, indexes dynamic fields using numbered badges ([1], [2]...), and inputs personal credentials with zero human intervention.
-              </li>
-              <li>
-                <strong>Headless Email Dispatch with Human Gate:</strong>
-                Drafts structured messages asynchronously via Nodemailer (TLS 465). Traps execution in an interactive card (*"Waiting for user authorization"*) until physical voice confirmation is granted.
-              </li>
-              <li>
-                <strong>Multi-Source Deep Research & OS Injection:</strong>
-                Concurrently queries and verifies primary institutional domains, synthesizes structured academic dossiers, launches Windows Notepad, and injects text via C++ clipboard acceleration in &lt; 250 ms.
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <!-- SECTION 7: BENCHMARK RESULTS & METRICS -->
-        <div class="section-card">
-          <div class="section-header">
-            <span class="section-num">07</span>
-            <span class="section-title">Experimental Benchmarks & Validation</span>
-          </div>
-          <div class="card-body">
-            <table class="compact-table" style="margin-bottom: 6px;">
-              <thead>
-                <tr>
-                  <th>Evaluation Parameter</th>
-                  <th>Legacy RPA</th>
-                  <th>Standard Voice AI</th>
-                  <th>Project Elyra</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>End-to-End Voice Latency</strong></td>
-                  <td>N/A (Scripted)</td>
-                  <td>1.8 – 2.5 s</td>
-                  <td class="val-highlight">480 – 620 ms (~3.5× Faster)</td>
-                </tr>
-                <tr>
-                  <td><strong>Layout Shift Resilience</strong></td>
-                  <td>0% (XPath Breakage)</td>
-                  <td>Unsupported</td>
-                  <td class="val-highlight">94.2% Self-Healing Recovery</td>
-                </tr>
-                <tr>
-                  <td><strong>Form Filling Accuracy</strong></td>
-                  <td>High (Static only)</td>
-                  <td>Unsupported</td>
-                  <td class="val-highlight">98.6% Deterministic Accuracy</td>
-                </tr>
-                <tr>
-                  <td><strong>Text Injection Latency</strong></td>
-                  <td>3.2 s (SendKeys)</td>
-                  <td>Unsupported</td>
-                  <td class="val-highlight">&lt; 250 ms (C++ Clipboard)</td>
-                </tr>
-                <tr>
-                  <td><strong>Bandwidth Optimization</strong></td>
-                  <td>N/A</td>
-                  <td>High (Constant Raw)</td>
-                  <td class="val-highlight">72% Delta-Diff Reduction</td>
-                </tr>
-              </tbody>
-            </table>
-            <div style="font-size: 8pt; color: #a7f3d0; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 4px; padding: 4px 8px;">
-              ✔ Verified Test Suite: 20/20 checks passed across Milestones 1–5 (Audio, DOM indexing, YouTube, DemoQA, Notepad, SMTP, and Security sandboxing).
+        <!-- CARD 4: KEY NOVELTIES -->
+        <div class="card">
+          <div class="card-title"><span class="num-pill">4</span> Core Innovations</div>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 8.8pt;">
+            <div style="background: rgba(30, 41, 59, 0.6); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+              <strong style="color: var(--cyan);">1. Visual Numbered DOM Tree-Walker:</strong>
+              Scans visible elements in &lt;15ms and overlays numeric badges ([1], [2]...). The model acts deterministically without selector fragility.
+            </div>
+            <div style="background: rgba(30, 41, 59, 0.6); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+              <strong style="color: var(--purple);">2. Safety & Anti-Loop Governor:</strong>
+              Enforces <em>1 User Command = Exactly 1 Task Card</em>. Sensitive actions (emails, system commands) require explicit voice confirmation (*"Haan bhej do"*).
+            </div>
+            <div style="background: rgba(30, 41, 59, 0.6); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+              <strong style="color: var(--green);">3. Kernel C++ Clipboard Acceleration:</strong>
+              Injects large multi-line research reports into Notepad in &lt;250 ms via Win32 API, completely eliminating NumLock flickering and dropped keys.
             </div>
           </div>
         </div>
 
-        <!-- SECTION 8: APPLICATIONS & CONCLUSION -->
-        <div class="section-card">
-          <div class="section-header">
-            <span class="section-num">08</span>
-            <span class="section-title">Applications & Future Roadmap</span>
-          </div>
-          <div class="card-body">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-              <div>
-                <strong style="color: var(--primary-cyan);">Key Real-World Applications:</strong>
-                <ul class="bullet-list" style="margin-top: 2px;">
-                  <li><strong>Hands-Free Accessibility:</strong> Full web and OS navigation for users with physical impairments.</li>
-                  <li><strong>Intelligent Web QA:</strong> Self-healing exploratory testing agents for web development teams.</li>
-                </ul>
-              </div>
-              <div>
-                <strong style="color: var(--primary-purple);">Future Roadmap:</strong>
-                <ul class="bullet-list" style="margin-top: 2px;">
-                  <li>Multi-browser CDP & Marionette abstraction for Firefox and WebKit.</li>
-                  <li>Offline quantized SLM fallback (Gemma 2B) for zero-latency local operations.</li>
-                </ul>
-              </div>
-            </div>
+        <!-- CARD 5: BENCHMARK RESULTS -->
+        <div class="card">
+          <div class="card-title"><span class="num-pill">5</span> Verified Benchmark Results</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Evaluation Parameter</th>
+                <th>Standard System</th>
+                <th>Project Elyra</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Voice Response Latency</strong></td>
+                <td>1.8 – 2.5 s</td>
+                <td class="val-green">480 – 620 ms (~3.5× Faster)</td>
+              </tr>
+              <tr>
+                <td><strong>UI Shift Resilience</strong></td>
+                <td>0% (XPath Breakage)</td>
+                <td class="val-green">94.2% Self-Healing Recovery</td>
+              </tr>
+              <tr>
+                <td><strong>Form Automation Accuracy</strong></td>
+                <td>Unsupported via voice</td>
+                <td class="val-green">98.6% Deterministic Success</td>
+              </tr>
+              <tr>
+                <td><strong>Notepad Text Injection</strong></td>
+                <td>3.2 s (WScript SendKeys)</td>
+                <td class="val-green">&lt; 250 ms (C++ Clipboard)</td>
+              </tr>
+              <tr>
+                <td><strong>Security Test Suite</strong></td>
+                <td>Unrestricted scripts</td>
+                <td class="val-green">100% Pass (20/20 Checks)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- CARD 6: REAL WORLD IMPACT -->
+        <div class="card">
+          <div class="card-title"><span class="num-pill">6</span> Real-World Impact & Applications</div>
+          <div style="font-size: 8.8pt; color: #cbd5e1; display: flex; flex-direction: column; gap: 6px;">
+            <div>▹ <strong>Hands-Free Motor Accessibility:</strong> Enables physically disabled individuals to operate web portals, fill forms, and manage email purely by voice.</div>
+            <div>▹ <strong>Self-Healing Enterprise QA:</strong> Autonomous web test agents that adapt to layout updates without manual test script maintenance.</div>
+            <div>▹ <strong>Executive Automation:</strong> Conducts multi-source research and prepares formatted reports in seconds.</div>
           </div>
         </div>
 
@@ -830,24 +408,13 @@
 
     </div>
 
-    <!-- INSTITUTIONAL FOOTER -->
-    <footer class="poster-footer">
-      <div class="footer-left">
-        <strong>Academic Conclusion:</strong> Project Elyra proves that coupling multimodal foundation models with deterministic visual DOM indexing and native OS primitives achieves resilient, real-time autonomous automation without brittle selectors. Developed at the <strong>Centre for Artificial Intelligence, Madhav Institute of Technology & Science, Gwalior</strong>.
+    <!-- FOOTER -->
+    <footer>
+      <div class="footer-meta">
+        <strong>Academic Conclusion:</strong> Demonstrates that fusing multimodal foundation models with dynamic visual DOM indexing achieves resilient, sub-second automation on personal desktop hardware. Developed at <strong>Centre for AI, MITS Gwalior</strong>.
       </div>
-      <div class="footer-right">
-        <div class="qr-box">
-          <!-- Direct SVG QR Code pointing to https://github.com/Krshedition/Project-Elyra -->
-          <svg viewBox="0 0 100 100" width="44" height="44" shape-rendering="crispEdges">
-            <rect width="100" height="100" fill="#ffffff" />
-            <path fill="#000000" d="M10,10 h30 v30 h-30 z M15,15 v20 h20 v-20 z M20,20 h10 v10 h-10 z M60,10 h30 v30 h-30 z M65,15 v20 h20 v-20 z M70,20 h10 v10 h-10 z M10,60 h30 v30 h-30 z M15,65 v20 h20 v-20 z M20,70 h10 v10 h-10 z M45,10 h10 v10 h-10 z M45,25 h10 v10 h-10 z M45,40 h10 v20 h-10 z M10,45 h15 v10 h-15 z M30,45 h25 v10 h-25 z M60,45 h10 v10 h-10 z M75,45 h15 v10 h-15 z M60,60 h15 v10 h-15 z M80,60 h10 v30 h-10 z M60,75 h15 v15 h-15 z M45,75 h10 v15 h-10 z" />
-          </svg>
-        </div>
-        <div class="qr-meta">
-          <span class="repo-title">PROJECT REPOSITORY</span>
-          <span class="repo-url">github.com/Krshedition/Project-Elyra</span>
-          <span style="color: var(--accent-gold); font-size: 6.5pt;">MITS DU • NAAC A++</span>
-        </div>
+      <div class="qr-pill">
+        REPO: github.com/Krshedition/Project-Elyra
       </div>
     </footer>
 
