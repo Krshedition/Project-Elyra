@@ -51,26 +51,72 @@ Project Expo - November 2026 | Madhav Institute of Technology & Science, Gwalior
 
 ---
 
-# [SECTION 2] ABSTRACT
+# [SECTION 2] ABSTRACT & CORE OPERATIONAL FLOW
 
-Traditional voice assistants (Siri, Alexa, Google Assistant) operate within rigid, pre-programmed boundaries, answering simple queries or opening desktop apps, but remaining fundamentally blind and helpless inside dynamic web interfaces and host operating systems. 
+Conventional voice assistants are restricted to static queries, lacking visual perception and execution agency inside web browsers and host operating systems. **Project Elyra** bridges real-time multimodal intelligence with native OS and browser control via real-time vision, numbered DOM indexing, and kernel-level event injection.
 
-**Project Elyra** breaks this paradigm by introducing an autonomous, multimodal desktop AI assistant that operates web applications and Windows OS workflows exactly like an expert human user. By combining the bidirectional **Google Gemini Multimodal Live API** (WebSocket 16 kHz audio & vision), **Chrome DevTools Protocol (CDP port 9222)** via Playwright, and a custom **C++ Native Addon (`node-addon-api`)**, Elyra perceives the desktop screen, indexes dynamic interactive elements with high-contrast numbered badges, and executes complex end-to-end tasks (form automation, video navigation, multi-source deep research, and secure headless SMTP email delivery) entirely via hands-free voice commands.
+```
+┌───────────────────────────────────────────────────────────────────┐
+│               USER VOICE INSTRUCTION (HINDI / ENG)                │
+└─────────────────────────────────┬─────────────────────────────────┘
+                                  │
+                                  ▼
+┌───────────────────────────────────────────────────────────────────┐
+│       PERCEPTION: 16 kHz PCM Audio + Delta Screen Stream          │
+└─────────────────────────────────┬─────────────────────────────────┘
+                                  │ Full-Duplex WebSocket
+                                  ▼
+┌───────────────────────────────────────────────────────────────────┐
+│       REASONING: Google Gemini Multimodal Live API Core           │
+└─────────────────────────────────┬─────────────────────────────────┘
+                                  │ Tool Invocation (JSON RPC)
+                                  ▼
+┌───────────────────────────────────────────────────────────────────┐
+│       PLANNER: Deterministic Multi-Step Task Engine               │
+└─────────────────┬───────────────────────────────┬─────────────────┘
+                  │                               │
+                  ▼                               ▼
+┌──────────────────────────────────┐ ┌──────────────────────────────┐
+│      BROWSER VIA CDP 9222        │ │      NATIVE OS RUNTIME       │
+│    Dynamic Numbered DOM Tags     │ │     Win32 C++ / TLS SMTP     │
+└─────────────────┬────────────────┘ └────────────┬─────────────────┘
+                  │                               │
+                  └───────────────┬───────────────┘
+                                  ▼
+┌───────────────────────────────────────────────────────────────────┐
+│       VERIFIER: Continuous State Validation & Self-Healing        │
+└─────────────────────────────────┬─────────────────────────────────┘
+                                  │
+                                  ▼
+┌───────────────────────────────────────────────────────────────────┐
+│               HANDS-FREE VERBAL CONFIRMATION OUTPUT               │
+└───────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-# [SECTION 3] PROBLEM STATEMENT & OBJECTIVES
+# [SECTION 3] PROBLEM STATEMENT & OBJECTIVES FLOW
 
-### 🔴 Problem Statement
-- **Brittle Web Automation:** Conventional frameworks (Selenium, Puppeteer) depend on hardcoded XPath/CSS selectors that break instantly whenever website layouts shift.
-- **Disconnected AI Assistants:** Contemporary conversational AI models generate instructions in text but possess zero agency to execute them directly on user machines.
-- **Lack of Autonomous Recovery:** Existing systems lack contextual self-healing, causing scripts to fail completely when confronted with popups, dynamic modals, or DOM mutations.
+### 🔴 Failure Flow of Traditional Systems
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│  DOM / UI Shift  │ ──> │ Brittle Selector │ ──> │ Script Crash &   │ ──> │ Zero Recovery    │
+│  Website Changes │     │ (XPath/CSS) Fails│     │ Execution Halts  │     │ Manual Fix Req.  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘     └──────────────────┘
 
-### 🎯 Key Objectives
-1. **Real-Time Multimodal Voice & Vision:** Establish a sub-second, full-duplex WebSocket stream carrying 16 kHz PCM voice and delta-compressed screen frames.
-2. **Visual DOM-Tagging Engine:** Eliminate brittle selectors by overlaying deterministic numbered badges ([1], [2], [3]...) over visible interactive elements.
-3. **Deterministic Multi-Step Task Planner:** Decompose open-ended natural language instructions into atomic, verifiable sub-problems with autonomous rollback and healing.
-4. **Human-in-the-Loop Headless Security:** Execute background email dispatch and kernel-level OS commands with strict rate-limiting, cooldowns, and mandatory physical confirmations.
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│ User Voice Query │ ──> │ Text-Only Cloud  │ ──> │ Zero OS Agency   │ ──> │ User Performs    │
+│ Natural Speech   │     │ LLM Generation   │     │ No Automation    │     │ Action Manually  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘     └──────────────────┘
+```
+
+### 🎯 Project Elyra Autonomous Solution Flow
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│ Full-Duplex 16k  │ ──> │ Tree-Walker DOM  │ ──> │ Atomic Multi-    │ ──> │ Human-Gated OS   │
+│ Voice & Vision   │     │ Numbered Badges  │     │ Step Planner     │     │ & Browser Exec   │
+└──────────────────┘     └──────────────────┘     └──────────────────┘     └──────────────────┘
+```
 
 ---
 
@@ -125,31 +171,94 @@ flowchart TD
 
 # [SECTION 6] CORE METHODOLOGY & NOVEL ALGORITHMS
 
-### 1. Dynamic DOM Tagging & Visual Perception Protocol
-Instead of relying on fragile CSS selectors or brittle XPaths, Elyra runs a lightweight recursive tree-walker script directly inside the active Chromium frame:
-- Traverses all visible interactive nodes (`<button>`, `<a>`, `<input>`, `<select>`, `[role="button"]`).
-- Computes exact viewport bounding client rectangles (`getBoundingClientRect`).
-- Injects high-contrast purple-bordered numeric badges (`[1]`, `[2]`, `[3]...`) directly over the elements.
-- Simultaneously returns a structured JSON hierarchy and an annotated visual frame to Gemini Live. The model issues actions targeting element numbers deterministically.
+### 1. Dynamic DOM Tagging & Visual Perception Flow
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│ Active Chromium  │ ──> │ Tree-Walker DOM  │ ──> │ Filter Visible   │
+│ Web Frame (CDP)  │     │ Node Traversal   │     │ Interactive UI   │
+└──────────────────┘     └──────────────────┘     └────────┬─────────┘
+                                                           │
+                                                           ▼
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│ Gemini Live Core │ <── │ JSON Coordinates │ <── │ Overlay Numeric  │
+│ Acts on Badges   │     │ + Annotated Frame│     │ Badges [1], [2]  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+```
 
-### 2. Execution Governor & Anti-Hallucination Safety Gate
-To prevent autonomous runaway loops and unauthorized actions:
-- **Command-Turn Anchor:** Exactly **1 User Command = At Most 1 Task Card** on the UI.
-- **Intent Whitelist Gates:** Spontaneous calls to sensitive actions (`browser_navigate`, `send_email`, `system_action`) are strictly blocked unless user speech explicitly matches intent.
-- **Rate-Limiting Cooldowns:** 60-second duplicate suppression on email and 45-second cooldown on deep research.
-- **Human-in-the-Loop Confirmation:** Destructive file operations (`delete`, `overwrite`) and system actions (`shutdown`, `restart`) prompt native physical OS approval dialogs.
+### 2. Execution Governor & Safety Decision Flow
+```
+┌───────────────────────────┐
+│      User Voice Turn      │
+└─────────────┬─────────────┘
+              ▼
+┌───────────────────────────┐         No Match
+│ Intent Whitelist Analysis │ ───────────────────────────> ┌───────────────────┐
+└─────────────┬─────────────┘                              │ Casual Banter     │
+              │ Valid Match                                │ (0 Tasks Created) │
+              ▼                                            └───────────────────┘
+┌───────────────────────────┐
+│  Single-Task Turn Anchor  │
+│  (1 Intent = 1 Task Card) │
+└─────────────┬─────────────┘
+              │
+      ┌───────┴───────────────────┐
+      ▼ Standard Operation        ▼ Critical Action (Email / OS)
+┌───────────────────────────┐   ┌───────────────────────────┐
+│ Direct Execution          │   │ Human-in-the-Loop Dialog  │
+│ (Brave Browser Navigate)  │   │ "Waiting for approval"    │
+└───────────────────────────┘   └─────────────┬─────────────┘
+                                              │ Explicit Voice Consent
+                                              ▼
+                                ┌───────────────────────────┐
+                                │ Dispatch + 60s Cooldown   │
+                                └───────────────────────────┘
+```
 
-### 3. Deterministic 4-Pillar Deep Research Architecture
-Replaces probabilistic single-query responses with a structured, multi-angle exploration matrix:
-- **Pillar 1:** Institutional Foundation, Governance & NAAC 'A++' Accreditation.
-- **Pillar 2:** Academic Architecture & Flagship AI/ML Specializations.
-- **Pillar 3:** Corporate Placement Statistics, Highest CTC & Marquee Recruiters.
-- **Pillar 4:** Campus Scale (44+ Acres), Central Library & Research Incubation.
-- **Visual Proof:** Automatically navigates Brave browser to the primary official domain (`web.mitsgwalior.in`) while extracting and synthesizing citations.
+### 3. Deterministic 4-Pillar Deep Research Flow
+```
+                ┌───────────────────────────────────────────┐
+                │ Research Topic Input: e.g. "MITS Gwalior" │
+                └─────────────────────┬─────────────────────┘
+                                      ▼
+                ┌───────────────────────────────────────────┐
+                │     4-Pillar Facet Decomposition Core     │
+                └─────┬───────────┬───────────┬───────────┬─┘
+                      │           │           │           │
+                      ▼           ▼           ▼           ▼
+               ┌─────────────┐┌───────────┐┌───────────┐┌───────────┐
+               │ Pillar 1:   ││ Pillar 2: ││ Pillar 3: ││ Pillar 4: │
+               │ Governance  ││ Academics ││ Placements││ Campus    │
+               │ (NAAC A++)  ││ AIML Track││ Marquee HR││ 44+ Acres │
+               └──────┬──────┘└─────┬─────┘└─────┬─────┘└─────┬─────┘
+                      │             │            │            │
+                      └─────────────┴─────┬──────┴────────────┘
+                                          ▼
+                ┌───────────────────────────────────────────┐
+                │ Live Visual Brave CDP (web.mitsgwalior.in)│
+                └─────────────────────┬─────────────────────┘
+                                      ▼
+                ┌───────────────────────────────────────────┐
+                │ Multi-Source Dossier Markdown Synthesis   │
+                └─────────────────────┬─────────────────────┘
+                                      ▼
+                ┌───────────────────────────────────────────┐
+                │ Native C++ Accelerated Export to Notepad  │
+                └───────────────────────────────────────────┘
+```
 
-### 4. Kernel-Level Native C++ Acceleration
-- Uses Win32 `SendInput` API compiled via `node-addon-api` to bypass Windows 11 input bugs (such as double `'vv'` on paste and laptop NumLock flickering).
-- Implements Clipboard Acceleration: transfers large multi-line architectural reports into Notepad in under 250 milliseconds with zero dropped characters.
+### 4. Kernel-Level Native C++ OS Acceleration Flow
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│ Synthesized Text │ ──> │ Win32 Clipboard  │ ──> │ Kernel SendInput │
+│ Dossier (Report) │     │ Heap Alloc (UTF8)│     │ Ctrl + V Event   │
+└──────────────────┘     └──────────────────┘     └────────┬─────────┘
+                                                           │
+                                                           ▼
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│ 0 Dropped Chars  │ <── │ Instant Paste    │ <── │ Bypass NumLock / │
+│ Perfect Output   │     │ < 250 Millisecs  │     │ KeyRepeat Bugs   │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+```
 
 ---
 
@@ -166,28 +275,50 @@ Replaces probabilistic single-query responses with a structured, multi-angle exp
 | **Bandwidth Utilization** | N/A | Constant video stream | **72% Reduction** | Dynamic visual delta-diff encoding |
 | **System Security Test Suite** | Unrestricted scripts | Sandbox isolated | **100% Pass (20/20)**| Kernel-protected path & process rules |
 
-### 🧪 Verified Milestone Test Cases
-- `[PASS]` Real-time voice interaction with floating reactive audio visualizer.
-- `[PASS]` Automated DemoQA form completion (`https://demoqa.com/automation-practice-form`) without human input.
-- `[PASS]` YouTube search, playback, and keyboard mute orchestration.
-- `[PASS]` Notepad self-description injection with 0 missed characters and no NumLock flickering.
-- `[PASS]` Headless SMTP email draft generation and human-confirmed delivery to `krshedition@gmail.com`.
-- `[PASS]` Deterministic multi-pillar research on MITS Gwalior with live visual Brave navigation.
+### 🧪 Milestone Verification Pipeline Flow
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│ M1: Voice Stream │ ──> │ M2: Visual DOM   │ ──> │ M3: Headless     │
+│ 16 kHz BidiStream│     │ Numbered Badging │     │ SMTP & Gate      │
+│ [✔ PASS: 480ms]  │     │ [✔ PASS: 98.6%]  │     │ [✔ PASS: 100%]   │
+└──────────────────┘     └──────────────────┘     └────────┬─────────┘
+                                                           │
+                                                           ▼
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│ Full Suite Pass  │ <── │ M5: Sandbox Core │ <── │ M4: Multi-Step   │
+│ 20 / 20 Checks   │     │ Win32 C++ Send   │     │ Deep Research    │
+│ [✔ 100% RELIABLE]│     │ [✔ PASS: <250ms] │     │ [✔ PASS: 3-Source│
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+```
 
 ---
 
-# [SECTION 8] REAL-WORLD APPLICATIONS & FUTURE SCOPE
+# [SECTION 8] REAL-WORLD APPLICATIONS & ROADMAP FLOW
 
-### 🌍 Real-World Applications
-- **Hands-Free Accessibility:** Enables individuals with motor impairments to navigate complex websites, fill forms, and manage emails solely via speech.
-- **Enterprise RPA & Testing:** Replaces brittle legacy automation with adaptive, layout-resilient AI test agents for web quality assurance.
-- **Executive Task Automation:** Automates multi-app workflows (copying meeting summaries, cross-referencing news, and dispatching reports) in seconds.
-
-### 🔮 Future Scope & Roadmap
-1. **Multi-Browser Expansion:** Extend CDP abstraction to Firefox (Marionette) and WebKit engines.
-2. **Local SLM Fallback:** Integrate quantized local models (such as Gemma 2B) for basic offline voice control during network drops.
-3. **Cross-Platform Portability:** Port the native C++ OS addon to macOS (`ApplicationServices`) and Linux (`X11/Wayland`).
-4. **Autonomous Multi-Agent Swarms:** Coordinate specialized agents for distributed web research and parallel report drafting.
+```
+┌───────────────────────────────────────────────────────────────────┐
+│                    STAGE 1: CURRENT DEPLOYMENT                    │
+│  • Hands-Free Motor Accessibility (Speech-Only Browser & OS)      │
+│  • Autonomous Web QA Testing (Dynamic DOM Layout Resilience)      │
+│  • Executive Workflow Automation (SMTP Delivery & Meeting Notes)  │
+└─────────────────────────────────┬─────────────────────────────────┘
+                                  │
+                                  ▼
+┌───────────────────────────────────────────────────────────────────┐
+│                  STAGE 2: EXPANSION & PORTABILITY                 │
+│  • Multi-Browser Engine Support (Firefox Marionette & WebKit)     │
+│  • Local SLM Fallback (Quantized Offline Gemma 2B Voice Core)     │
+│  • Cross-Platform Native Addon (macOS Services & Linux X11)       │
+└─────────────────────────────────┬─────────────────────────────────┘
+                                  │
+                                  ▼
+┌───────────────────────────────────────────────────────────────────┐
+│                    STAGE 3: AUTONOMOUS SWARMS                     │
+│  • Distributed Multi-Agent Cooperative Research Swarms            │
+│  • Long-Term Semantic Graph Memory Store                          │
+│  • Self-Evolving Dynamic Macro Synthesizer                        │
+└───────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
