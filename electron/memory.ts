@@ -44,6 +44,8 @@ export function initMemory() {
   try {
     const seedFacts = [
       { category: 'demo_workflows', key: 'demo_practice_form_url', value: 'https://demoqa.com/automation-practice-form' },
+      { category: 'demo_workflows', key: 'demo_form_target_website', value: 'https://demoqa.com/automation-practice-form (Mandatory sole URL for all demo form commands)' },
+      { category: 'demo_workflows', key: 'demoform_sole_url_rule', value: 'Whenever Krish commands to fill a demo form or practice form, ALWAYS and ONLY open https://demoqa.com/automation-practice-form' },
       { category: 'personal', key: 'user_primary_email', value: 'krshedition@gmail.com' },
       { category: 'tech_stack', key: 'email_dispatch_architecture', value: 'Node.js nodemailer headless SMTP over secure TLS (port 465) with Google App Password authentication and human-in-the-loop security verification before dispatch' },
       { category: 'tech_stack', key: 'elyra_system_architecture', value: 'Google Gemini Multimodal Live API (WebSocket 16kHz audio & screen context) + Electron/React GUI + C++ Native Addon (node-addon-api) for Windows OS control + Playwright & CDP (Port 9222) for resilient DOM element tagging and browser automation' }

@@ -134,10 +134,10 @@ CRITICAL VOICE COMMAND & MULTI-STEP PROTOCOL:
   CORE PRESENTATION & DEMO WORKFLOW KNOWLEDGE (NATURAL EXECUTION ON DEMAND):
   - NATURAL DEMO BEHAVIOR: Behave completely naturally, witty, and reactive at all times. NEVER anticipate, announce, or speak about these tasks during startup or idle chit-chat. Greet with "Jai Shree Krishna Krish! Main hoon Elyra. Aaj kya karne ka plan hai?" and wait silently for Krish. You act as though each task is assigned for the first time when Krish speaks to you in front of his teachers. You possess the internal memory to execute them smoothly with zero hesitation.
 
-  - WORKFLOW 1: PRACTICE / DEMO FORM AUTOMATION
-    When Krish commands: "open one of the demoform website and fill that" (or "open demoform website and fill that", "open practice form and fill that", "demo form fill kar do"):
-    1. Primary Form URL: 'https://demoqa.com/automation-practice-form'
-    2. Navigate via 'browser_navigate' to this URL in Brave.
+  - WORKFLOW 1: DEMO FORM AUTOMATION (MANDATORY SOLE TARGET: DEMOQA)
+    Whenever Krish commands to "fill demo form", "open one of the demoform website and fill that", "open demoform website and fill that", "demo form bhar do", "practice form fill karo", or ANY variation of demo form:
+    1. MANDATORY SOLE TARGET SITE RULE: You MUST open this site ONLY: 'https://demoqa.com/automation-practice-form'. You are strictly forbidden from searching Google or navigating to any other form website!
+    2. Navigate via 'browser_navigate' directly to 'https://demoqa.com/automation-practice-form' in Brave.
     3. Inspect/index interactive elements using 'browser_analyze_page'.
     4. Fill the registration form fields cleanly via 'browser_fill_form' or 'browser_type_input':
        - First Name: 'Krish' (selector: '#firstName' or its element ID)
@@ -1188,7 +1188,7 @@ export function useLiveSession() {
                       { id: 's2', stepNumber: 2, title: 'Compose & inject requested text', subProblem: 'Write content into Notepad window', status: 'pending', actionName: 'type_text' },
                       { id: 's3', stepNumber: 3, title: 'Verify document presentation', subProblem: 'Ensure text is displayed on screen', status: 'pending', actionName: 'verify_status' }
                     ];
-                  } else if (speechLower.includes('demoform') || speechLower.includes('demo form') || speechLower.includes('practice form')) {
+                  } else if (speechLower.includes('demoform') || speechLower.includes('demo form') || speechLower.includes('practice form') || speechLower.includes('demoqa') || (speechLower.includes('form') && (speechLower.includes('demo') || speechLower.includes('fill')))) {
                     taskTitle = 'DemoQA: Automated Form Completion';
                     sourceApp = 'Brave Browser';
                     targetApp = 'DemoQA Practice Form';
@@ -1329,22 +1329,38 @@ export function useLiveSession() {
                   }
                 }
 
-                // STRICT DEMO FORM / DEMOQA SAFETY GATE: Prevent spontaneous navigation or form filling without explicit user command
-                if (call.name === 'browser_navigate' || call.name === 'browser_new_tab') {
+                // STRICT DEMO FORM / DEMOQA LOCK & SAFETY GATE: Enforce sole target https://demoqa.com/automation-practice-form
+                const isExplicitDemoForm = /\b(demoform|demo form|practice form|demoqa|fill demo form|fill form)\b/i.test(lastUserSpeech);
+                if (isExplicitDemoForm) {
+                  if (call.name === 'browser_navigate' || call.name === 'browser_new_tab') {
+                    const targetUrl = String(((call.args as any)?.url || '')).toLowerCase();
+                    if (!targetUrl.includes('demoqa.com/automation-practice-form')) {
+                      console.log(`[DemoFormLock] Enforcing mandatory sole demo form URL: https://demoqa.com/automation-practice-form (was "${targetUrl}")`);
+                      (call.args as any).url = 'https://demoqa.com/automation-practice-form';
+                    }
+                  } else if (call.name === 'fetch_web_search') {
+                    console.log(`[DemoFormLock] Intercepted web search during demo form command. Directing to DemoQA.`);
+                    responses.push({
+                      id: call.id || "1",
+                      name: call.name,
+                      response: {
+                        result: 'The designated sole demo form website is https://demoqa.com/automation-practice-form. Do not search; directly navigate to this URL using browser_navigate.'
+                      }
+                    });
+                    continue;
+                  }
+                } else if (call.name === 'browser_navigate' || call.name === 'browser_new_tab') {
                   const targetUrl = ((call.args as any)?.url || '').toLowerCase();
                   if (targetUrl.includes('demoqa')) {
-                    const isExplicitDemoForm = /\b(demoform|demo form|practice form|form|demoqa)\b/i.test(lastUserSpeech);
-                    if (!isExplicitDemoForm) {
-                      console.warn(`[AntiHallucinationGate] Blocked hallucinated navigation to DemoQA. User speech was: "${pendingUserDraftRef.current}"`);
-                      responses.push({
-                        id: call.id || "1",
-                        name: call.name,
-                        response: {
-                          error: `Action blocked: Krish did not ask to open DemoQA or fill a form (User speech was: "${pendingUserDraftRef.current}"). Do NOT navigate to demoqa.com or trigger form automation based on casual chat, memory facts, or unrelated commands!`
-                        }
-                      });
-                      continue;
-                    }
+                    console.warn(`[AntiHallucinationGate] Blocked hallucinated navigation to DemoQA. User speech was: "${pendingUserDraftRef.current}"`);
+                    responses.push({
+                      id: call.id || "1",
+                      name: call.name,
+                      response: {
+                        error: `Action blocked: Krish did not ask to open DemoQA or fill a form (User speech was: "${pendingUserDraftRef.current}"). Do NOT navigate to demoqa.com or trigger form automation based on casual chat, memory facts, or unrelated commands!`
+                      }
+                    });
+                    continue;
                   }
                 }
 
